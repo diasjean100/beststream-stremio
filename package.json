@@ -1,0 +1,15 @@
+{
+  "name": "beststream-stremio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stremio bridge for public BestFreeStreaming sources. Availability is checked, never assumed.",
+  "type": "module",
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "check": "node scripts/check.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": { "playwright": "1.62.1" }
+}
