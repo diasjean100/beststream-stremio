@@ -9,6 +9,9 @@
 - Downloads do BingeBang apresentam configuração de verificação antirrobô. Ela não foi resolvida nem contornada.
 - Dez grupos de testes locais passaram: IDs, rede privada, cache, diretório, tipos de mídia, identidade do episódio, modos do add-on, streams, catálogo e servidor HTTP. Os testes usam fixtures e provedores simulados.
 - A verificação de sintaxe JavaScript passou.
+- O GitHub Actions também executou os dez grupos de testes e a verificação de sintaxe com sucesso.
+- O primeiro teste real de fonte no GitHub Actions falhou na etapa de busca de BingeBang para o filme e o episódio. Portanto, nenhuma reprodução direta foi confirmada nesse teste.
+- O `render.yaml` passou na validação estrutural com o JSON Schema oficial de `render.com/schema/render.yaml.json`. Isso não equivale a um deploy concluído.
 
 ## Ainda não comprovado
 

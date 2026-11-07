@@ -58,10 +58,12 @@ export class BrowserSource {
       });
       stage='homepage';
       await page.goto(provider.url,{waitUntil:'domcontentloaded'});
+      await page.waitForLoadState('load',{timeout:6500}).catch(()=>{});
       if(await challenge(page)) return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
       const search=page.getByRole('button',{name:'Search',exact:true});
-      stage='search';
+      stage='search-open';
       await search.click();
+      stage='search-input';
       const input=page.getByPlaceholder(/Search.*(?:movies|TV)/i);
       await input.waitFor({state:'visible'});
       await input.fill(meta.name);
@@ -117,6 +119,11 @@ export class BrowserSource {
       return {status:'not-found',streams:[],message:'O título e episódio exatos não foram confirmados nesta fonte.'};
     } catch(error) {
       console.warn(JSON.stringify({event:'provider_failure',provider:provider.id,stage,error:error.name}));
+      if(process.env.CI && page && !page.isClosed()) {
+        // Public UI diagnostics only. Never dump cookies, source URLs or page scripts.
+        const state=await page.evaluate(()=>({title:document.title,text:document.body.innerText.slice(0,500),buttons:Array.from(document.querySelectorAll('button')).slice(0,25).map(b=>b.getAttribute('aria-label')||b.innerText),inputs:Array.from(document.querySelectorAll('input')).filter(i=>i.type!=='hidden').slice(0,8).map(i=>({type:i.type,placeholder:i.placeholder,visible:!!i.getClientRects().length}))})).catch(()=>null);
+        console.warn(JSON.stringify({event:'provider_public_ui',stage,state}));
+      }
       return {status:'unavailable',streams:[],message:/browser.*executable|executable.*exist/i.test(error.message)?'Navegador do servidor indisponível.':'A fonte não concluiu a consulta dentro do prazo.'};
     } finally {
       clearTimeout(timer);await context?.close().catch(()=>{});this.lastUsed=Date.now();
