@@ -51,7 +51,7 @@ O plano gratuito tem recursos e franquias limitados, pode suspender o serviço p
 ## Verificações
 
 ```sh
-npm test       # dez grupos de testes locais, sem depender das fontes externas
+npm test       # onze grupos de testes locais, sem depender das fontes externas
 npm run check  # sintaxe de todos os arquivos JavaScript
 npm run smoke  # teste real: filme + episódio; falha se não houver vídeo direto
 ```

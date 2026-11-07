@@ -31,3 +31,5 @@ As requisições diretas do ambiente de desenvolvimento ao Cinemeta e ao BingeBa
 3. Teste de integração real do filme e do episódio, sem retornar link de navegador como substituto de vídeo.
 4. Reprodução validada no Stremio e no aparelho do usuário.
 5. Qualquer ampliação de cobertura acompanhada de testes próprios por fonte e por episódio.
+
+A execução seguinte do teste ao vivo confirmou a causa: a resposta pública de BingeBang no GitHub Actions foi a página do Cloudflare ‘Performing security verification’, sem controles de busca. O add-on agora reconhece esse bloqueio antes de tentar iniciar a busca. A proteção não foi contornada. Foi adicionado um teste de regressão, totalizando onze grupos locais.

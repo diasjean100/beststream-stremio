@@ -5,7 +5,7 @@ import {publicAddress,publicTarget} from '../src/network.js';
 import {parseVideo} from '../src/metadata.js';
 import {BOOTSTRAP,parseDirectory} from '../src/directory.js';
 import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject} from '../src/media.js';
-import {sameIdentity} from '../src/browser-source.js';
+import {sameIdentity,hasChallenge} from '../src/browser-source.js';
 import {createAddon,manifest} from '../src/addon.js';
 import {createServer} from '../src/server.js';
 
@@ -93,4 +93,10 @@ test('HTTP protocol, CORS, install page and error states',async()=>{
     assert.equal((await fetch(`${base}/manifest.json`,{method:'OPTIONS'})).status,204);
     assert.equal((await fetch(`${base}/manifest.json`,{method:'POST'})).status,405);
   }finally{await new Promise(r=>server.close(r));}
+});
+
+test('provider security challenges are reported before attempting playback',()=>{
+  assert.equal(hasChallenge('Just a moment...', 'Performing security verification'),true);
+  assert.equal(hasChallenge('BingeBang','This website uses a security service to protect against malicious bots.'),true);
+  assert.equal(hasChallenge('BingeBang','Search movies and TV shows'),false);
 });

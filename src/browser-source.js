@@ -133,6 +133,9 @@ export class BrowserSource {
     }
   }
 }
+export function hasChallenge(title, text) {
+  return /just a moment|checking your browser|verify you are human|complete the security check|performing security verification|protect against malicious bots/i.test(`${title} ${text}`);
+}
 async function challenge(page) {
-  return /just a moment|checking your browser|verify you are human|complete the security check/i.test((await page.locator('body').innerText()).slice(0,2500));
+  return hasChallenge(await page.title(), (await page.locator('body').innerText()).slice(0,2500));
 }
