@@ -4,7 +4,7 @@ import { metadata, parseVideo, search } from './metadata.js';
 import { BrowserSource,nexaPlaybackUrl } from './browser-source.js';
 import { streamObject } from './media.js';
 export function manifest(nativeOnly=false) {
-  return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:'0.3.0',name:nativeOnly?'BestStream • Direto':'BestStream',
+  return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:'0.3.1',name:nativeOnly?'BestStream • Direto':'BestStream',
     description:nativeOnly?'Somente vídeos diretos identificados e verificados. Cobertura experimental.':'Busca filmes e séries pelo IMDb. Vídeos diretos quando confirmados e acesso às fontes do BestFreeStreaming pelo navegador.',
     resources:[{name:'stream',types:['movie','series'],idPrefixes:['tt']},'catalog'],types:['movie','series'],
     catalogs:[{type:'movie',id:'beststream-movies',name:'BestStream • Buscar filmes',extra:[{name:'search',isRequired:true},{name:'skip'}]},
@@ -65,6 +65,7 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       if(!nativeOnly) streams.push({name:'BestStream • Abrir fontes',title:'Abre no navegador • disponibilidade por site não confirmada',externalUrl:`${base}/watch/${type}/${encodeURIComponent(id)}`});
       return {streams,cacheMaxAge:streams.some(s=>s.url)?60:10};
     },
+    warm:()=>browser.warm?.(),
     close:()=>browser.close?.()
   };
 }

@@ -1,5 +1,6 @@
 import {createAddon} from '../src/addon.js';
 const addon=createAddon();
+// Reuse the same isolated-browser adapter across movie and episode queries.
 let failed=false;
 try {
   for(const [type,id] of [['movie','tt0133093'],['movie','tt1375666'],['series','tt0903747:1:1'],['series','tt0903747:2:3']]) {

@@ -19,14 +19,20 @@ export function nexaEpisodeConfirmed(text,video) {
 }
 
 export class BrowserSource {
-  constructor() { this.running=false; this.instance=null; this.lastUsed=0; this.checked=new Map(); }
+  constructor() { this.running=false; this.instance=null; this.launching=null; this.idleTimer=null; this.lastUsed=0; this.checked=new Map(); }
   async browser() {
+    clearTimeout(this.idleTimer);
     if(this.instance?.isConnected()) return this.instance;
-    const {chromium}=await import('playwright');
-    this.instance=await chromium.launch({headless:true,args:['--disable-dev-shm-usage','--disable-background-networking','--js-flags=--max-old-space-size=128']});
-    return this.instance;
+    if(!this.launching)this.launching=(async()=>{
+      const {chromium}=await import('playwright');
+      this.instance=await chromium.launch({headless:true,args:['--disable-dev-shm-usage','--disable-background-networking','--js-flags=--max-old-space-size=128']});
+      return this.instance;
+    })().finally(()=>{this.launching=null;});
+    return this.launching;
   }
-  async close() { const b=this.instance;this.instance=null;await b?.close(); }
+  releaseIdle() { clearTimeout(this.idleTimer);this.idleTimer=setTimeout(()=>{if(!this.running)this.close().catch(()=>{});},45_000);this.idleTimer.unref(); }
+  async warm() { await this.browser();if(!this.running)this.releaseIdle(); }
+  async close() { clearTimeout(this.idleTimer);await this.launching?.catch(()=>{});const b=this.instance;this.instance=null;await b?.close(); }
   async resolve(provider,video,meta) {
     if(!['bingebang-st','nexa-mov'].includes(provider.id)) return {status:'unsupported',streams:[],message:'Fonte disponível somente como link de navegador.'};
     if(provider.id==='nexa-mov'&&!nexaPlaybackUrl(video,meta))return {status:'unsupported',streams:[],message:'O identificador desta fonte não foi confirmado para este vídeo.'};
@@ -96,7 +102,13 @@ export class BrowserSource {
         if(await challenge(page))return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
         stage='nexa-play';
         const play=page.getByRole('button',{name:'Play',exact:true}).first();
-        if(await play.isVisible().catch(()=>false))await play.click();
+        if(await play.isVisible().catch(()=>false))await play.click({noWaitAfter:true,timeout:2500}).catch(async error=>{
+          // A successful Play click can turn into Pause while Chromium is still
+          // waiting for a page event. Confirm the result instead of discarding it.
+          if(error.name!=='TimeoutError')throw error;
+          const playing=await page.getByRole('button',{name:'Pause',exact:true}).isVisible().catch(()=>false);
+          if(!playing&&!candidates.length)throw error;
+        });
         stage='nexa-sources';
         if(!candidates.length)await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:18000}).catch(()=>{});
         await page.mouse.move(640,360);
@@ -174,9 +186,9 @@ export class BrowserSource {
       return {status:'unavailable',streams:[],diagnosticStage:stage,message:/browser.*executable|executable.*exist/i.test(error.message)?'Navegador do servidor indisponível.':'A fonte não concluiu a consulta dentro do prazo.'};
     } finally {
       clearTimeout(timer);await context?.close().catch(()=>{});this.lastUsed=Date.now();
-      // Free instances have limited RAM. Release Chromium after each lookup.
-      await this.close().catch(()=>{});
       this.running=false;
+      // Reuse Chromium for nearby requests; release it after a short idle period.
+      this.releaseIdle();
     }
   }
 }

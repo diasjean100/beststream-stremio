@@ -3,6 +3,18 @@
 import {json} from '../src/network.js';
 import {validateMedia} from '../src/media.js';
 const base='https://beststream-stremio-jean.onrender.com';
+const expected=process.env.GITHUB_SHA;
+const until=Date.now()+4*60_000;
+let ready=false;
+console.log(JSON.stringify({event:'waiting_for_release',expected:expected||null}));
+while(Date.now()<until){
+  try{
+    const health=await json(base+'/healthz',{timeout:10_000});
+    if(health.version==='0.3.1'&&(!expected||health.commit===expected)){ready=true;console.log(JSON.stringify({event:'release_ready',version:health.version,commit:health.commit}));break;}
+  }catch{}
+  await new Promise(resolve=>setTimeout(resolve,3000));
+}
+if(!ready)throw Error('The intended release did not become ready within four minutes');
 let failures=0;
 for(const [type,id] of [['movie','tt0133093'],['movie','tt1375666'],['series','tt0903747:1:1'],['series','tt0903747:2:3']]) {
   const started=Date.now();

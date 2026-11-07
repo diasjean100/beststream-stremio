@@ -26,7 +26,7 @@ export function createServer(addon=createAddon(),getDirectory=directory) {
     let path;try{path=decodeURIComponent(rawPath);}catch{return send(400,{error:'URL inválida'});}
     const nativeOnly=path.startsWith('/native/');if(nativeOnly)path=path.slice(7);
     try {
-      if(path==='/healthz')return send(200,{ok:true,name:'BestStream',version:'0.3.0',commit:process.env.RENDER_GIT_COMMIT||null});
+      if(path==='/healthz')return send(200,{ok:true,name:'BestStream',version:'0.3.1',commit:process.env.RENDER_GIT_COMMIT||null});
       if(path==='/manifest.json')return send(200,addon.manifest(nativeOnly));
       if(path==='/api/sources')return send(200,await getDirectory());
       // PUBLIC_BASE_URL or Render's trusted canonical URL prevents forwarded-host poisoning.
@@ -50,6 +50,7 @@ export function createServer(addon=createAddon(),getDirectory=directory) {
       if(catalog)return send(200,await addon.catalog(catalog[1],catalog[2],new URLSearchParams(catalog[3]||'')));
       if(/^\/watch\/(movie|series)\/tt\d{5,12}(?::\d{1,3}:\d{1,5})?$/.test(path)||allowedAssets.has(path)) {
         const name=allowedAssets.get(path)||'index.html';
+        if(name==='index.html')Promise.resolve(addon.warm?.()).catch(()=>{});
         if(!assets.has(name))assets.set(name,await readFile(new URL(`../public/${name}`,import.meta.url)));
         return send(200,assets.get(name),types[name.slice(name.lastIndexOf('.'))]);
       }
