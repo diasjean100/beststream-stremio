@@ -5,7 +5,7 @@ import {publicAddress,publicTarget} from '../src/network.js';
 import {parseVideo,metadata} from '../src/metadata.js';
 import {BOOTSTRAP,parseDirectory} from '../src/directory.js';
 import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject} from '../src/media.js';
-import {sameIdentity,hasChallenge,nexaPlaybackUrl,nexaEpisodeConfirmed} from '../src/browser-source.js';
+import {sameIdentity,hasChallenge,nexaPlaybackUrl,nexaEpisodeConfirmed,normalize} from '../src/browser-source.js';
 import {createAddon,manifest} from '../src/addon.js';
 import {createServer} from '../src/server.js';
 
@@ -110,6 +110,8 @@ test('provider security challenges are reported before attempting playback',()=>
   assert.equal(hasChallenge('Verifying your browser - NOXX',''),true);
 });
 test('Cinemeta supplies the TMDB mapping instead of guessing by title',async()=>{
+  assert.equal(normalize('Coração & Ação'),'coracao acao');
+  assert.notEqual(normalize('你好'),normalize('再见'));
   const meta=await metadata(parseVideo('movie','tt0133093'),async()=>({meta:{id:'tt0133093',name:'The Matrix',type:'movie',moviedb_id:603,year:'1999'}}));
   assert.equal(meta.tmdb,603);assert.equal(meta.name,'The Matrix');
   assert.equal(nexaPlaybackUrl(parseVideo('movie','tt0133093'),meta),'https://nexa.mov/watch/tmdb-movie/603');

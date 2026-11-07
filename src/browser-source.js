@@ -2,7 +2,7 @@ import { publicTarget } from './network.js';
 import { mediaUrl, playerIdentity, validateMedia } from './media.js';
 
 const TIMEOUT=32_000;
-export const normalize=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+export const normalize=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 export function sameIdentity(identity, video) {
   return identity?.imdb===video.imdb && (video.type==='movie'?identity.season===0&&identity.episode===0:identity.season===video.season&&identity.episode===video.episode);
 }
@@ -85,7 +85,7 @@ export class BrowserSource {
         stage='nexa-title';
         // Player controls can auto-hide. Verify their DOM title without requiring the HUD to remain visible.
         await page.waitForFunction(name=>{
-          const clean=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+          const clean=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
           return Array.from(document.querySelectorAll('h1')).some(h=>clean(h.textContent||h.querySelector('img')?.alt||'')===clean(name));
         },video.type==='series'?`${meta.name} S${video.season} E${video.episode}`:meta.name,{timeout:10000});
         stage='nexa-play';
