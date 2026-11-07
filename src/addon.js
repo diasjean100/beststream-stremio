@@ -4,7 +4,7 @@ import { metadata, parseVideo, search } from './metadata.js';
 import { BrowserSource } from './browser-source.js';
 import { streamObject } from './media.js';
 export function manifest(nativeOnly=false) {
-  return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:'0.1.0',name:nativeOnly?'BestStream • Direto':'BestStream • Fontes',
+  return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:'0.2.0',name:nativeOnly?'BestStream • Direto':'BestStream • Fontes',
     description:nativeOnly?'Somente vídeos diretos identificados e verificados. Cobertura experimental.':'Busca filmes e séries pelo IMDb. Vídeos diretos quando confirmados e acesso às fontes do BestFreeStreaming pelo navegador.',
     resources:[{name:'stream',types:['movie','series'],idPrefixes:['tt']},'catalog'],types:['movie','series'],
     catalogs:[{type:'movie',id:'beststream-movies',name:'BestStream • Buscar filmes',extra:[{name:'search',isRequired:true},{name:'skip'}]},
@@ -21,9 +21,16 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       const key=`${type}:${id}`;
       return cache.use(key,value=>value.streams.length?120_000:12_000,async()=>{
         const [meta,dir]=await Promise.all([getMetadata(video),getDirectory()]);
-        const provider=dir.sources.find(p=>p.id==='bingebang-st');
-        const resolved=provider?await browser.resolve(provider,video,meta):{streams:[],status:'unavailable',message:'Fonte de reprodução ausente do diretório.'};
-        return {...resolved,video,meta,streams:resolved.streams.map(s=>streamObject(s,provider))};
+        const providers=dir.sources.filter(p=>p.id==='bingebang-st'||(p.id==='nexa-mov'&&video.type==='movie'&&meta.tmdb)).sort((a,b)=>a.id==='nexa-mov'?-1:b.id==='nexa-mov'?1:0);
+        const attempts=[];
+        let latest={streams:[],status:'unavailable',message:'Fonte de reprodução ausente do diretório.'};
+        for(const provider of providers){
+          const resolved=await browser.resolve(provider,video,meta);
+          attempts.push({provider:provider.name,status:resolved.status});
+          if(!latest.pageUrl||resolved.pageUrl)latest={...resolved,provider:provider.name};
+          if(resolved.streams.length)return {...resolved,video,meta,attempts,streams:resolved.streams.map(s=>streamObject(s,provider))};
+        }
+        return {...latest,video,meta,attempts,streams:[]};
       });
     },
     async streams(type,id,base,nativeOnly=false) {
@@ -32,6 +39,7 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       let result;
       try {result=await this.resolve(type,id);} catch {result={streams:[],status:'metadata-unavailable'};}
       const streams=[...result.streams];
+      if(!nativeOnly&&result.pageUrl)streams.push({name:`BestStream • ${result.provider||'Fonte'} no navegador`,title:'Página do título • abre no navegador',externalUrl:result.pageUrl});
       if(!nativeOnly) streams.push({name:'BestStream • Abrir fontes',title:'Abre no navegador • disponibilidade por site não confirmada',externalUrl:`${base}/watch/${type}/${encodeURIComponent(id)}`});
       return {streams,cacheMaxAge:streams.some(s=>s.url)?60:10};
     },

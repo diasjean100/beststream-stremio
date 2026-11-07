@@ -2,7 +2,7 @@
 
 Add-on em português com busca de filmes e séries pelo IMDb, página de instalação e diretório de fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/).
 
-**Estado: preview 0.1. Reprodução direta ainda exige validação ao vivo. Não há cobertura confirmada de todos os sites, filmes ou episódios.**
+**Estado: preview 0.2. Reprodução direta ainda exige validação ao vivo. Não há cobertura confirmada de todos os sites, filmes ou episódios.**
 
 ## O que está implementado
 
@@ -11,7 +11,7 @@ Add-on em português com busca de filmes e séries pelo IMDb, página de instala
 - Dois modos: **Fontes**, com acesso ao navegador, e **Direto**, que só retorna mídia quando a verificação passa.
 - Busca de títulos pelo Cinemeta. A busca não comprova a disponibilidade de vídeo na fonte.
 - Lista de referência de 55 entradas da página inicial, consultada em 06/11/2026, e tentativa de atualização do diretório a cada 12 horas. Sites listados não são 55 extratores implementados.
-- Um adaptador experimental para BingeBang: consulta a interface pública de busca, confere IMDb/temporada/episódio e tenta validar HLS/MP4. Nenhuma URL temporária de um teste é gravada no código.
+- Adaptadores experimentais: BingeBang para busca por título e episódio; Nexa para filmes com o TMDB associado ao IMDb pelo Cinemeta. Vídeo direto exige verificação do conteúdo HLS/MP4. URLs temporárias não são gravadas no código.
 - Os demais sites são links externos. Abertura do site, extração de vídeo, validação HTTP e reprodução no aparelho são etapas diferentes.
 - Cache limitado, isolamento de consultas do navegador, limite de requisições e bloqueio de destinos privados nas requisições do servidor.
 
@@ -51,7 +51,7 @@ O plano gratuito tem recursos e franquias limitados, pode suspender o serviço p
 ## Verificações
 
 ```sh
-npm test       # onze grupos de testes locais, sem depender das fontes externas
+npm test       # treze grupos de testes locais, sem depender das fontes externas
 npm run check  # sintaxe de todos os arquivos JavaScript
 npm run smoke  # teste real: filme + episódio; falha se não houver vídeo direto
 ```

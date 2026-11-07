@@ -6,6 +6,10 @@ export const normalize=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toL
 export function sameIdentity(identity, video) {
   return identity?.imdb===video.imdb && (video.type==='movie'?identity.season===0&&identity.episode===0:identity.season===video.season&&identity.episode===video.episode);
 }
+export function nexaPlaybackUrl(video,meta) {
+  if(video.type!=='movie'||!Number.isSafeInteger(meta.tmdb)||meta.tmdb<1)return null;
+  return `https://nexa.mov/watch/tmdb-movie/${meta.tmdb}`;
+}
 
 export class BrowserSource {
   constructor() { this.running=false; this.instance=null; this.lastUsed=0; this.checked=new Map(); }
@@ -17,7 +21,8 @@ export class BrowserSource {
   }
   async close() { const b=this.instance;this.instance=null;await b?.close(); }
   async resolve(provider,video,meta) {
-    if(provider.id!=='bingebang-st') return {status:'unsupported',streams:[],message:'Fonte disponível somente como link de navegador.'};
+    if(!['bingebang-st','nexa-mov'].includes(provider.id)) return {status:'unsupported',streams:[],message:'Fonte disponível somente como link de navegador.'};
+    if(provider.id==='nexa-mov'&&!nexaPlaybackUrl(video,meta))return {status:'unsupported',streams:[],message:'O identificador desta fonte não foi confirmado para este vídeo.'};
     if(this.running) return {status:'busy',streams:[],message:'A fonte está consultando outro título. Tente novamente em alguns segundos.'};
     this.running=true;
     let context;
@@ -51,11 +56,27 @@ export class BrowserSource {
       page.on('popup',p=>p.close().catch(()=>{}));
       page.on('response', response=> {
         const url=response.url();
-        if(response.status()<400 && mediaUrl(url) && !/trailer|preview|youtube/i.test(url) && !candidates.some(c=>c.url===url)) {
-          const referer=response.request().headers().referer;
-          candidates.push({url,headers:referer?{Referer:referer}: {}});
+        const mime=String(response.headers()['content-type']||'');
+        const hls=/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(mime);
+        if(response.status()<400 && (mediaUrl(url)||hls) && !/trailer|preview|youtube/i.test(url) && !candidates.some(c=>c.url===url)) {
+          const requestHeaders=response.request().headers();
+          candidates.push({url,...(hls?{format:'HLS'}:{}),headers:{...(requestHeaders.referer?{Referer:requestHeaders.referer}:{}),...(requestHeaders['user-agent']?{'User-Agent':requestHeaders['user-agent']}:{})}});
         }
       });
+      if(provider.id==='nexa-mov') {
+        stage='nexa-player';
+        const playerUrl=nexaPlaybackUrl(video,meta);
+        await page.goto(playerUrl,{waitUntil:'domcontentloaded'});
+        await page.waitForLoadState('load',{timeout:6500}).catch(()=>{});
+        if(await challenge(page))return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
+        await page.getByRole('heading',{name:meta.name,exact:true,level:1}).waitFor({state:'visible',timeout:8000});
+        const play=page.getByRole('button',{name:'Play',exact:true});
+        if(await play.isVisible().catch(()=>false))await play.click();
+        if(!candidates.length)await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:9000}).catch(()=>{});
+        stage='nexa-media-validation';
+        const verified=await verifyCandidates(candidates);
+        return {status:verified.length?'resolved':'web-only',streams:verified,pageUrl:playerUrl,message:verified.length?'Vídeo direto verificado no servidor.':'Título identificado, mas o vídeo direto desta fonte não foi confirmado.'};
+      }
       stage='homepage';
       await page.goto(provider.url,{waitUntil:'domcontentloaded'});
       await page.waitForLoadState('load',{timeout:6500}).catch(()=>{});
@@ -106,13 +127,9 @@ export class BrowserSource {
         await page.goto(playUrl.href,{waitUntil:'domcontentloaded'});
         const identity=await page.locator('script:not([src])').allTextContents();
         if(!identity.map(playerIdentity).some(id=>sameIdentity(id,video))) continue;
-        await page.waitForResponse(r=>r.status()<400&&mediaUrl(r.url()),{timeout:7000}).catch(()=>{});
+        if(!candidates.length)await page.waitForResponse(r=>r.status()<400&&mediaUrl(r.url()),{timeout:7000}).catch(()=>{});
         stage='media-validation';
-        const verified=[];
-        for(const candidate of candidates.slice(0,3)) {
-          const result=await validateMedia(candidate);
-          if(result)verified.push(result);
-        }
+        const verified=await verifyCandidates(candidates);
         if(verified.length)return {status:'resolved',streams:verified,pageUrl:playUrl.href,message:'Playlist ou vídeo respondeu corretamente a partir do servidor.'};
         return {status:'web-only',streams:[],pageUrl:playUrl.href,message:'Título e episódio identificados, mas o vídeo direto não foi validado.'};
       }
@@ -133,8 +150,11 @@ export class BrowserSource {
     }
   }
 }
+async function verifyCandidates(candidates) {
+  return (await Promise.all(candidates.slice(0,2).map(c=>validateMedia(c)))).filter(Boolean);
+}
 export function hasChallenge(title, text) {
-  return /just a moment|checking your browser|verify you are human|complete the security check|performing security verification|protect against malicious bots/i.test(`${title} ${text}`);
+  return /just a moment|checking your browser|verifying your browser|making sure you.re not a bot|attention required.*cloudflare|verify you are human|complete the security check|performing security verification|protect against malicious bots/i.test(`${title} ${text}`);
 }
 async function challenge(page) {
   return hasChallenge(await page.title(), (await page.locator('body').innerText()).slice(0,2500));

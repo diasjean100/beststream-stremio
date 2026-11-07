@@ -14,7 +14,7 @@ const snapshot=[
   ['2Flix','2flix.lol'],['MoviesJoy','moviesjoy.bz'],['CornClick','cornclick.com'],['Flixer','flixer.gd'],['HDToday','hdtoday.sc'],
   ['Movish','movish.to'],['MooPlay','mooplay.cc'],['BoredFlix','boredflix.to'],['NOXX','noxx.gg'],['AZMovies','azmovies.to']
 ];
-export const BOOTSTRAP=snapshot.map(([name,host],i)=>({id:host.replace(/\W/g,'-'),name,url:host==='rentry.co'?'https://rentry.co/rivestream':`https://${host}/`,rank:i+1,adapter:host==='bingebang.st'?'browser':null,availability:'unverified'}));
+export const BOOTSTRAP=snapshot.map(([name,host],i)=>({id:host.replace(/\W/g,'-'),name,url:host==='rentry.co'?'https://rentry.co/rivestream':`https://${host}/`,rank:i+1,adapter:['bingebang.st','nexa.mov'].includes(host)?'browser':null,availability:'unverified'}));
 
 export function plain(value='') { return value.replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&#39;|&apos;/g,"'").replace(/&quot;/g,'"').replace(/\s+/g,' ').trim(); }
 export function parseDirectory(html) {

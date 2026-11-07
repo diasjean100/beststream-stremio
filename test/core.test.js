@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Cache} from '../src/cache.js';
 import {publicAddress,publicTarget} from '../src/network.js';
-import {parseVideo} from '../src/metadata.js';
+import {parseVideo,metadata} from '../src/metadata.js';
 import {BOOTSTRAP,parseDirectory} from '../src/directory.js';
 import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject} from '../src/media.js';
-import {sameIdentity,hasChallenge} from '../src/browser-source.js';
+import {sameIdentity,hasChallenge,nexaPlaybackUrl} from '../src/browser-source.js';
 import {createAddon,manifest} from '../src/addon.js';
 import {createServer} from '../src/server.js';
 
@@ -42,6 +42,10 @@ test('HTML, iframe pages, DRM and fake playlists are never direct streams',async
   assert.equal(await validateMedia({url:'https://example.com/a.mp4'},async()=>({status:403,body:Buffer.from('denied'),headers:{}})),null);
   const verified=await validateMedia({url:'https://example.com/a.m3u8'},async()=>({status:200,url:'https://example.com/a.m3u8',body:Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts'),headers:{}}));
   assert.equal(verified.format,'HLS');
+  const noExtension=await validateMedia({url:'https://example.com/playlist?token=test',format:'HLS'},async()=>({status:200,url:'https://example.com/playlist?token=test',body:Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts'),headers:{}}));
+  assert.equal(noExtension.format,'HLS');
+  assert.equal(await validateMedia({url:'file:///etc/passwd',format:'HLS'},async()=>{throw Error('must not fetch')}),null);
+  assert.equal(await validateMedia({url:'https://example.com/a.mp4'},async()=>({status:200,body:Buffer.from('<html>blocked</html>'),headers:{'content-type':'video/mp4'}})),null);
   const stream=streamObject({...verified,headers:{Referer:'https://bingebang.st/'}},BOOTSTRAP[0]);
   assert.equal(stream.behaviorHints.notWebReady,true);assert.equal(stream.behaviorHints.proxyHeaders.request.Referer,'https://bingebang.st/');
 });
@@ -99,4 +103,18 @@ test('provider security challenges are reported before attempting playback',()=>
   assert.equal(hasChallenge('Just a moment...', 'Performing security verification'),true);
   assert.equal(hasChallenge('BingeBang','This website uses a security service to protect against malicious bots.'),true);
   assert.equal(hasChallenge('BingeBang','Search movies and TV shows'),false);
+  assert.equal(hasChallenge('Verifying your browser - NOXX',''),true);
+});
+test('Cinemeta supplies the TMDB mapping instead of guessing by title',async()=>{
+  const meta=await metadata(parseVideo('movie','tt0133093'),async()=>({meta:{id:'tt0133093',name:'The Matrix',type:'movie',moviedb_id:603,year:'1999'}}));
+  assert.equal(meta.tmdb,603);assert.equal(meta.name,'The Matrix');
+  assert.equal(nexaPlaybackUrl(parseVideo('movie','tt0133093'),meta),'https://nexa.mov/watch/tmdb-movie/603');
+  assert.equal(nexaPlaybackUrl(parseVideo('series','tt0903747:1:1'),{tmdb:1396}),null);
+  assert.equal(nexaPlaybackUrl(parseVideo('movie','tt0133093'),{tmdb:'https://attacker.test'}),null);
+});
+test('provider fallback uses exact mapped source and preserves confirmed webpage links',async()=>{
+  const calls=[];
+  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async(p)=>{calls.push(p.name);return p.id==='nexa-mov'?{status:'web-only',streams:[],pageUrl:'https://nexa.mov/watch/tmdb-movie/603'}:{status:'blocked',streams:[]};},close:async()=>{}}});
+  const r=await addon.streams('movie','tt0133093','https://addon.test');
+  assert.deepEqual(calls,['Nexa','BingeBang']);assert.equal(r.streams[0].externalUrl,'https://nexa.mov/watch/tmdb-movie/603');assert.equal(r.streams[0].url,undefined);
 });

@@ -14,7 +14,8 @@ export async function metadata(video, getJson=json) {
   return cache.use(`${video.type}:${video.imdb}`, 6*60*60*1000, async()=> {
     const {meta}=await getJson(`${CINEMETA}/meta/${video.type}/${video.imdb}.json`);
     if(!meta || meta.id!==video.imdb || !meta.name || (meta.type && meta.type!==video.type)) throw new Error('Título não identificado pelo Cinemeta');
-    return {name:meta.name,year:String(meta.releaseInfo||meta.year||'').match(/\d{4}/)?.[0]||'',poster:meta.poster||'',description:meta.description||''};
+    const tmdb=Number(meta.moviedb_id);
+    return {name:meta.name,year:String(meta.releaseInfo||meta.year||'').match(/\d{4}/)?.[0]||'',poster:meta.poster||'',description:meta.description||'',...(Number.isSafeInteger(tmdb)&&tmdb>0?{tmdb}:{})};
   });
 }
 

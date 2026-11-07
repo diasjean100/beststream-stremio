@@ -16,3 +16,9 @@ for(const type of ['movie','series']){
  const d=await json(`https://v3-cinemeta.strem.io/meta/${type}/${id}.json`);
  console.log(JSON.stringify({event:'nexa_id_mapping',type,id,tmdb:d.meta.moviedb_id,name:d.meta.name}));
 }
+const entries=[...new Set(Array.from(html.matchAll(/["']([^"']*_app\/immutable\/entry\/[^"']+\.js)["']/g)).map(m=>new URL(m[1],root).href))];
+console.log(JSON.stringify({event:'nexa_entries',paths:entries.map(u=>new URL(u).pathname)}));
+for(const entry of entries.filter(u=>u.includes('/app.')).slice(0,1)){
+ const asset=await request(entry,{maxBytes:1_500_000});const code=asset.body.toString();
+ console.log(JSON.stringify({event:'nexa_app',status:asset.status,bytes:asset.body.length,code:code.slice(0,22000)}));
+}
