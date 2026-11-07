@@ -5,7 +5,7 @@ import {publicAddress,publicTarget} from '../src/network.js';
 import {parseVideo,metadata} from '../src/metadata.js';
 import {BOOTSTRAP,parseDirectory} from '../src/directory.js';
 import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject} from '../src/media.js';
-import {sameIdentity,hasChallenge,nexaPlaybackUrl} from '../src/browser-source.js';
+import {sameIdentity,hasChallenge,nexaPlaybackUrl,nexaEpisodeConfirmed} from '../src/browser-source.js';
 import {createAddon,manifest} from '../src/addon.js';
 import {createServer} from '../src/server.js';
 
@@ -78,7 +78,8 @@ test('catalog preserves Unicode and encoded search titles',async()=>{
   assert.deepEqual(captured,{type:'movie',q:'Coração & Ação',skip:0});assert.equal(result.metas[0].name,captured.q);
 });
 test('HTTP protocol, CORS, install page and error states',async()=>{
-  const fake=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),getSearch:async()=>[],browser:{resolve:async()=>({status:'not-found',streams:[]}),close:async()=>{}}});
+  let httpSearch;
+  const fake=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),getSearch:async(_type,q)=>{httpSearch=q;return [];},browser:{resolve:async()=>({status:'not-found',streams:[]}),close:async()=>{}}});
   const server=createServer(fake,async()=>({sources:BOOTSTRAP,origin:'snapshot'}));
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const base=`http://127.0.0.1:${server.address().port}`;
@@ -94,6 +95,9 @@ test('HTTP protocol, CORS, install page and error states',async()=>{
     assert.match(await(await fetch(base)).text(),/BestStream/);
     assert.match((await fetch(`${base}/style.css`)).headers.get('content-type'),/text\/css/);
     assert.equal((await fetch(`${base}/api/sources`)).status,200);
+    const title='Coração & Ação 100%';
+    await fetch(`${base}/catalog/movie/beststream-movies/search=${encodeURIComponent(title)}.json`);
+    assert.equal(httpSearch,title);
     assert.equal((await fetch(`${base}/manifest.json`,{method:'OPTIONS'})).status,204);
     assert.equal((await fetch(`${base}/manifest.json`,{method:'POST'})).status,405);
   }finally{await new Promise(r=>server.close(r));}
@@ -109,12 +113,40 @@ test('Cinemeta supplies the TMDB mapping instead of guessing by title',async()=>
   const meta=await metadata(parseVideo('movie','tt0133093'),async()=>({meta:{id:'tt0133093',name:'The Matrix',type:'movie',moviedb_id:603,year:'1999'}}));
   assert.equal(meta.tmdb,603);assert.equal(meta.name,'The Matrix');
   assert.equal(nexaPlaybackUrl(parseVideo('movie','tt0133093'),meta),'https://nexa.mov/watch/tmdb-movie/603');
-  assert.equal(nexaPlaybackUrl(parseVideo('series','tt0903747:1:1'),{tmdb:1396}),null);
+  assert.equal(nexaPlaybackUrl(parseVideo('series','tt0903747:1:1'),{tmdb:1396}),'https://nexa.mov/watch/tmdb-tv/1396/s1-e1');
+  assert.equal(nexaPlaybackUrl(parseVideo('series','tt0903747:0:1'),{tmdb:1396}),null);
   assert.equal(nexaPlaybackUrl(parseVideo('movie','tt0133093'),{tmdb:'https://attacker.test'}),null);
+});
+test('second provider requires the requested episode in its visible player',()=>{
+  const ep=parseVideo('series','tt0903747:1:2');
+  assert.equal(nexaEpisodeConfirmed('Breaking Bad S01 · E02',ep),true);
+  assert.equal(nexaEpisodeConfirmed('Breaking Bad Season 1 Episode 2',ep),true);
+  assert.equal(nexaEpisodeConfirmed('Breaking Bad 1x2',ep),true);
+  assert.equal(nexaEpisodeConfirmed('Breaking Bad S01 E20',ep),false);
+  assert.equal(nexaEpisodeConfirmed('Breaking Bad S01 E01',ep),false);
+  assert.equal(nexaEpisodeConfirmed('Breaking Bad',ep),false);
 });
 test('provider fallback uses exact mapped source and preserves confirmed webpage links',async()=>{
   const calls=[];
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async(p)=>{calls.push(p.name);return p.id==='nexa-mov'?{status:'web-only',streams:[],pageUrl:'https://nexa.mov/watch/tmdb-movie/603'}:{status:'blocked',streams:[]};},close:async()=>{}}});
+  await addon.resolve('movie','tt0133093');
   const r=await addon.streams('movie','tt0133093','https://addon.test');
   assert.deepEqual(calls,['Nexa','BingeBang']);assert.equal(r.streams[0].externalUrl,'https://nexa.mov/watch/tmdb-movie/603');assert.equal(r.streams[0].url,undefined);
+});
+test('browser-source card remains available while direct resolution is still pending',async()=>{
+  let finish;
+  const pending=new Promise(resolve=>{finish=resolve;});
+  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:()=>pending,close:async()=>{}}});
+  const r=await addon.streams('movie','tt0063350','https://addon.test');
+  assert.equal(r.streams[0].externalUrl,'https://addon.test/watch/movie/tt0063350');
+  finish({status:'not-found',streams:[]});
+  await addon.resolve('movie','tt0063350');
+});
+test('mapped browser sources use movie and episode URLs without claiming direct playback',async()=>{
+  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Breaking Bad',tmdb:1396}),browser:{resolve:async()=>({status:'blocked',streams:[]}),close:async()=>{}}});
+  const r=await addon.streams('series','tt0903747:2:3','https://addon.test');
+  assert.equal(r.streams[0].externalUrl,'https://nexa.mov/watch/tmdb-tv/1396/s2-e3');
+  assert.match(r.streams[0].title,/não confirmada/);assert.equal(r.streams[0].url,undefined);
+  const native=await addon.streams('series','tt0903747:2:3','https://addon.test',true);
+  assert.deepEqual(native.streams,[]);
 });

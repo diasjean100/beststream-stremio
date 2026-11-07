@@ -1,7 +1,7 @@
 import { Cache } from './cache.js';
 import { directory } from './directory.js';
 import { metadata, parseVideo, search } from './metadata.js';
-import { BrowserSource } from './browser-source.js';
+import { BrowserSource,nexaPlaybackUrl } from './browser-source.js';
 import { streamObject } from './media.js';
 export function manifest(nativeOnly=false) {
   return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:'0.2.0',name:nativeOnly?'BestStream • Direto':'BestStream • Fontes',
@@ -12,6 +12,7 @@ export function manifest(nativeOnly=false) {
 }
 export function createAddon({getDirectory=directory,getMetadata=metadata,browser=new BrowserSource(),getSearch=search}={}) {
   const cache=new Cache(120);
+  const getMeta=video=>cache.use(`meta:${video.type}:${video.imdb}`,6*60*60*1000,()=>getMetadata(video));
   return {
     manifest,
     catalog:async(type,id,extra)=>({metas:id===`beststream-${type==='movie'?'movies':'series'}`?await getSearch(type,extra.get('search')||'',Number(extra.get('skip')||0)):[],cacheMaxAge:300}),
@@ -20,15 +21,15 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       if(!video)return {video:null,streams:[],status:'invalid',message:'Use o IMDb do filme ou IMDb:temporada:episódio da série.'};
       const key=`${type}:${id}`;
       return cache.use(key,value=>value.streams.length?120_000:12_000,async()=>{
-        const [meta,dir]=await Promise.all([getMetadata(video),getDirectory()]);
-        const providers=dir.sources.filter(p=>p.id==='bingebang-st'||(p.id==='nexa-mov'&&video.type==='movie'&&meta.tmdb)).sort((a,b)=>a.id==='nexa-mov'?-1:b.id==='nexa-mov'?1:0);
+        const [meta,dir]=await Promise.all([getMeta(video),getDirectory()]);
+        const providers=dir.sources.filter(p=>p.id==='bingebang-st'||(p.id==='nexa-mov'&&meta.tmdb)).sort((a,b)=>a.id==='nexa-mov'?-1:b.id==='nexa-mov'?1:0);
         const attempts=[];
         let latest={streams:[],status:'unavailable',message:'Fonte de reprodução ausente do diretório.'};
         for(const provider of providers){
           const resolved=await browser.resolve(provider,video,meta);
-          attempts.push({provider:provider.name,status:resolved.status});
+          attempts.push({provider:provider.name,status:resolved.status,...(resolved.diagnosticStage?{stage:resolved.diagnosticStage}:{})});
           if(!latest.pageUrl||resolved.pageUrl)latest={...resolved,provider:provider.name};
-          if(resolved.streams.length)return {...resolved,video,meta,attempts,streams:resolved.streams.map(s=>streamObject(s,provider))};
+          if(resolved.streams.length)return {...resolved,provider:provider.name,video,meta,attempts,streams:resolved.streams.map(s=>streamObject(s,provider))};
         }
         return {...latest,video,meta,attempts,streams:[]};
       });
@@ -37,9 +38,21 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       const video=parseVideo(type,id);
       if(!video)return {streams:[],cacheMaxAge:10};
       let result;
-      try {result=await this.resolve(type,id);} catch {result={streams:[],status:'metadata-unavailable'};}
+      if(!nativeOnly) {
+        result=cache.get(`${type}:${id}`)||{streams:[],status:'checking'};
+        if(result.status==='checking')this.resolve(type,id).catch(()=>{});
+      } else {
+        try {result=await this.resolve(type,id);} catch {result={streams:[],status:'metadata-unavailable'};}
+      }
       const streams=[...result.streams];
       if(!nativeOnly&&result.pageUrl)streams.push({name:`BestStream • ${result.provider||'Fonte'} no navegador`,title:'Página do título • abre no navegador',externalUrl:result.pageUrl});
+      if(!nativeOnly&&!result.pageUrl) {
+        let timer;
+        const meta=await Promise.race([getMeta(video).catch(()=>null),new Promise(resolve=>{timer=setTimeout(()=>resolve(null),1200);})]);
+        clearTimeout(timer);
+        const pageUrl=meta?nexaPlaybackUrl(video,meta):null;
+        if(pageUrl)streams.push({name:'BestStream • Nexa no navegador',title:'Consultar título no site • disponibilidade não confirmada',externalUrl:pageUrl});
+      }
       if(!nativeOnly) streams.push({name:'BestStream • Abrir fontes',title:'Abre no navegador • disponibilidade por site não confirmada',externalUrl:`${base}/watch/${type}/${encodeURIComponent(id)}`});
       return {streams,cacheMaxAge:streams.some(s=>s.url)?60:10};
     },

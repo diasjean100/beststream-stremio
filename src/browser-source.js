@@ -1,14 +1,21 @@
 import { publicTarget } from './network.js';
 import { mediaUrl, playerIdentity, validateMedia } from './media.js';
 
-const TIMEOUT=24_000;
+const TIMEOUT=32_000;
 export const normalize=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 export function sameIdentity(identity, video) {
   return identity?.imdb===video.imdb && (video.type==='movie'?identity.season===0&&identity.episode===0:identity.season===video.season&&identity.episode===video.episode);
 }
 export function nexaPlaybackUrl(video,meta) {
-  if(video.type!=='movie'||!Number.isSafeInteger(meta.tmdb)||meta.tmdb<1)return null;
-  return `https://nexa.mov/watch/tmdb-movie/${meta.tmdb}`;
+  if(!Number.isSafeInteger(meta.tmdb)||meta.tmdb<1)return null;
+  if(video.type==='movie')return `https://nexa.mov/watch/tmdb-movie/${meta.tmdb}`;
+  if(video.type==='series'&&video.season>=1&&video.episode>=1&&video.episode<=9999)return `https://nexa.mov/watch/tmdb-tv/${meta.tmdb}/s${video.season}-e${video.episode}`;
+  return null;
+}
+export function nexaEpisodeConfirmed(text,video) {
+  if(video.type==='movie')return true;
+  const s=video.season,e=video.episode;
+  return new RegExp(`(?:\\bs0?${s}\\s*[-:•·]?\\s*e0?${e}\\b|\\b${s}\\s*[x×]\\s*${e}\\b|\\bseason\\s+${s}\\s*[,•·-]?\\s*episode\\s+${e}\\b)`,'i').test(text);
 }
 
 export class BrowserSource {
@@ -64,15 +71,30 @@ export class BrowserSource {
         }
       });
       if(provider.id==='nexa-mov') {
-        stage='nexa-player';
+        stage='nexa-navigation';
         const playerUrl=nexaPlaybackUrl(video,meta);
         await page.goto(playerUrl,{waitUntil:'domcontentloaded'});
+        stage='nexa-load';
         await page.waitForLoadState('load',{timeout:6500}).catch(()=>{});
         if(await challenge(page))return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
-        await page.getByRole('heading',{name:meta.name,exact:true,level:1}).waitFor({state:'visible',timeout:8000});
-        const play=page.getByRole('button',{name:'Play',exact:true});
+        const dialog=page.getByRole('dialog');
+        if(await dialog.count()) {
+          const close=dialog.getByRole('button',{name:/^(Close|Got it|Dismiss|OK)$/i}).first();
+          if(await close.isVisible().catch(()=>false))await close.click();
+        }
+        stage='nexa-title';
+        // Player controls can auto-hide. Verify their DOM title without requiring the HUD to remain visible.
+        await page.waitForFunction(name=>{
+          const clean=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+          return Array.from(document.querySelectorAll('h1')).some(h=>clean(h.textContent||h.querySelector('img')?.alt||'')===clean(name));
+        },video.type==='series'?`${meta.name} S${video.season} E${video.episode}`:meta.name,{timeout:10000});
+        stage='nexa-play';
+        const play=page.getByRole('button',{name:'Play',exact:true}).first();
         if(await play.isVisible().catch(()=>false))await play.click();
-        if(!candidates.length)await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:9000}).catch(()=>{});
+        stage='nexa-sources';
+        if(!candidates.length)await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:18000}).catch(()=>{});
+        await page.mouse.move(640,360);
+        if(new URL(page.url()).pathname!==new URL(playerUrl).pathname||!nexaEpisodeConfirmed(await page.locator('body').innerText(),video))return {status:'web-only',streams:[],pageUrl:playerUrl,message:'O número exato do episódio não foi confirmado no reprodutor.'};
         stage='nexa-media-validation';
         const verified=await verifyCandidates(candidates);
         return {status:verified.length?'resolved':'web-only',streams:verified,pageUrl:playerUrl,message:verified.length?'Vídeo direto verificado no servidor.':'Título identificado, mas o vídeo direto desta fonte não foi confirmado.'};
@@ -136,12 +158,13 @@ export class BrowserSource {
       return {status:'not-found',streams:[],message:'O título e episódio exatos não foram confirmados nesta fonte.'};
     } catch(error) {
       console.warn(JSON.stringify({event:'provider_failure',provider:provider.id,stage,error:error.name}));
-      if(process.env.CI && page && !page.isClosed()) {
+      if(page && !page.isClosed()) {
         // Public UI diagnostics only. Never dump cookies, source URLs or page scripts.
-        const state=await page.evaluate(()=>({title:document.title,text:document.body.innerText.slice(0,500),buttons:Array.from(document.querySelectorAll('button')).slice(0,25).map(b=>b.getAttribute('aria-label')||b.innerText),inputs:Array.from(document.querySelectorAll('input')).filter(i=>i.type!=='hidden').slice(0,8).map(i=>({type:i.type,placeholder:i.placeholder,visible:!!i.getClientRects().length}))})).catch(()=>null);
+        const state=await page.evaluate(()=>({title:document.title,headings:Array.from(document.querySelectorAll('h1,h2')).slice(0,8).map(h=>h.innerText),buttons:Array.from(document.querySelectorAll('button')).slice(0,20).map(b=>b.getAttribute('aria-label')||b.innerText)})).catch(()=>null);
         console.warn(JSON.stringify({event:'provider_public_ui',stage,state}));
+        if(state&&hasChallenge(state.title,state.headings.join(' ')))return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
       }
-      return {status:'unavailable',streams:[],message:/browser.*executable|executable.*exist/i.test(error.message)?'Navegador do servidor indisponível.':'A fonte não concluiu a consulta dentro do prazo.'};
+      return {status:'unavailable',streams:[],diagnosticStage:stage,message:/browser.*executable|executable.*exist/i.test(error.message)?'Navegador do servidor indisponível.':'A fonte não concluiu a consulta dentro do prazo.'};
     } finally {
       clearTimeout(timer);await context?.close().catch(()=>{});this.lastUsed=Date.now();
       // Free instances have limited RAM. Release Chromium after each lookup.

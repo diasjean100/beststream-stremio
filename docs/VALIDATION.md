@@ -33,3 +33,11 @@ As requisições diretas do ambiente de desenvolvimento ao Cinemeta e ao BingeBa
 5. Qualquer ampliação de cobertura acompanhada de testes próprios por fonte e por episódio.
 
 A execução seguinte do teste ao vivo confirmou a causa: a resposta pública de BingeBang no GitHub Actions foi a página do Cloudflare ‘Performing security verification’, sem controles de busca. O add-on agora reconhece esse bloqueio antes de tentar iniciar a busca. A proteção não foi contornada. Foi adicionado um teste de regressão, totalizando onze grupos locais.
+
+O serviço foi publicado no plano Free do Render e atingiu estado live. A página de instalação, o manifesto, /healthz, o diretório de 55 sites e a busca de filmes responderam HTTP 200. A busca por Matrix retornou 20 títulos. Um teste de The Matrix na primeira versão hospedada recebeu a página de verificação da fonte BingeBang; reprodução direta não foi confirmada.
+
+A segunda integração usa o campo moviedb_id retornado pelo Cinemeta. O formato de episódio do Nexa foi conferido no código público do próprio site: /watch/tmdb-tv/ID/sTEMPORADA-eEPISODIO. O adaptador exige também confirmação visual do número do episódio antes de retornar vídeo. Quatorze grupos de testes locais e a verificação de sintaxe passaram após essas mudanças.
+
+Na verificação independente do Nexa no navegador, The Matrix foi reproduzido por 124 segundos, com duração de 8179 segundos, readyState 4 e nenhum erro do elemento de vídeo. Esse resultado confirma a reprodução daquela página naquele navegador; não equivale a reprodução nativa no Stremio.
+
+O modo Fontes foi ajustado para responder enquanto a consulta de vídeo continua, evitando que fontes lentas ocultem o botão do add-on. O link de navegador é construído pelo mapeamento IMDb/TMDB e está explicitamente marcado com disponibilidade não confirmada. Dezesseis grupos de testes locais passaram, incluindo o protocolo HTTP com acentos, ampersand e sinal de percentual nos títulos.

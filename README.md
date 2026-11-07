@@ -9,9 +9,9 @@ Add-on em português com busca de filmes e séries pelo IMDb, página de instala
 - Recursos `manifest`, `catalog` e `stream` no protocolo HTTP do Stremio, com CORS.
 - Identificadores IMDb compatíveis com títulos abertos a partir de outros catálogos: `tt…` para filmes e `tt…:temporada:episódio` para séries.
 - Dois modos: **Fontes**, com acesso ao navegador, e **Direto**, que só retorna mídia quando a verificação passa.
-- Busca de títulos pelo Cinemeta. A busca não comprova a disponibilidade de vídeo na fonte.
+- Busca de títulos pelo Cinemeta. A busca não comprova a disponibilidade de vídeo na fonte. O modo Fontes oferece também a página do título ou episódio no Nexa, identificada como navegação externa e sem afirmar disponibilidade.
 - Lista de referência de 55 entradas da página inicial, consultada em 06/11/2026, e tentativa de atualização do diretório a cada 12 horas. Sites listados não são 55 extratores implementados.
-- Adaptadores experimentais: BingeBang para busca por título e episódio; Nexa para filmes com o TMDB associado ao IMDb pelo Cinemeta. Vídeo direto exige verificação do conteúdo HLS/MP4. URLs temporárias não são gravadas no código.
+- Adaptadores experimentais: BingeBang para busca por título e episódio; Nexa para filmes e episódios com o TMDB associado ao IMDb pelo Cinemeta. Vídeo direto exige verificação do conteúdo HLS/MP4. URLs temporárias não são gravadas no código.
 - Os demais sites são links externos. Abertura do site, extração de vídeo, validação HTTP e reprodução no aparelho são etapas diferentes.
 - Cache limitado, isolamento de consultas do navegador, limite de requisições e bloqueio de destinos privados nas requisições do servidor.
 
@@ -51,12 +51,12 @@ O plano gratuito tem recursos e franquias limitados, pode suspender o serviço p
 ## Verificações
 
 ```sh
-npm test       # treze grupos de testes locais, sem depender das fontes externas
+npm test       # dezesseis grupos de testes locais, sem depender das fontes externas
 npm run check  # sintaxe de todos os arquivos JavaScript
 npm run smoke  # teste real: filme + episódio; falha se não houver vídeo direto
 ```
 
-O GitHub Actions executa os testes locais e uma verificação separada de fonte ao vivo. Falha nesse teste significa que a integração não foi validada; os testes com fixtures não substituem esse resultado. Não são registrados links assinados, cookies nem tickets das fontes nos logs do smoke.
+O GitHub Actions executa os testes locais. A verificação separada de fonte ao vivo é manual para evitar consultas repetidas aos sites que exigem verificação. Falha nesse teste significa que a integração não foi validada; os testes com fixtures não substituem esse resultado. Não são registrados links assinados, cookies nem tickets das fontes nos logs do smoke.
 
 Consulte [o registro de validação](docs/VALIDATION.md) para saber exatamente o que foi observado.
 

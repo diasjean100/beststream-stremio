@@ -45,7 +45,8 @@ export function createServer(addon=createAddon(),getDirectory=directory) {
         if(rate.count>20)return send(429,{error:'Aguarde um minuto antes de consultar mais títulos.'});
         return send(200,stream?await addon.streams(video.type,video.id,base,nativeOnly):await addon.resolve(video.type,video.id));
       }
-      const catalog=/^\/catalog\/(movie|series)\/([\w-]+)(?:\/([^/]*))?\.json$/.exec(path);
+      // Preserve percent encoding until URLSearchParams parses the extra fields, including literal '&'.
+      const catalog=/^\/catalog\/(movie|series)\/([\w-]+)(?:\/([^/]*))?\.json$/.exec(nativeOnly?rawPath.slice(7):rawPath);
       if(catalog)return send(200,await addon.catalog(catalog[1],catalog[2],new URLSearchParams(catalog[3]||'')));
       if(/^\/watch\/(movie|series)\/tt\d{5,12}(?::\d{1,3}:\d{1,5})?$/.test(path)||allowedAssets.has(path)) {
         const name=allowedAssets.get(path)||'index.html';
