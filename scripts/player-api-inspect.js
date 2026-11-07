@@ -29,10 +29,11 @@ while(queue.length&&seen.size<64){
  const code=response.body.toString();
  const imports=Array.from(code.matchAll(/["'`](\.\.?\/[^"'` ]+\.js)["'`]/g)).map(m=>new URL(m[1],url).href);
  queue.push(...imports.filter(p=>new URL(p).origin===new URL(app).origin&&!seen.has(p)));
- const relevant=/\/api\/|m3u8|streamUrl|sources\s*:|fetch\(/.test(code);
+ const relevant=/\/api\/|m3u8|streamUrl|sources\s*:|fetch\(|resolveSourcesBaseUrl/.test(code);
  if(!relevant)continue;
+ if(/CBmKq8ng|Dvvi7yjv|nodes\/22\./.test(url))console.log(JSON.stringify({event:'player_public_module_code',path:new URL(url).pathname,code:sanitize(code.slice(0,18000))}));
  console.log(JSON.stringify({event:'player_module',path:new URL(url).pathname,bytes:code.length,imports:imports.length}));
- for(const term of ['/api/','m3u8','streamUrl','sources:','fetch(']){
+ for(const term of ['/api/','m3u8','streamUrl','sources:','fetch(','/v1/','resolveSourcesBaseUrl','platform','origin:','backend']){
   let from=0,count=0;
   while(count++<5){const i=code.indexOf(term,from);if(i<0)break;console.log(JSON.stringify({event:'player_api_code',term,path:new URL(url).pathname,excerpt:sanitize(code.slice(Math.max(0,i-170),i+350))}));from=i+term.length;}
  }
