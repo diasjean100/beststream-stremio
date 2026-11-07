@@ -102,7 +102,7 @@ export class BrowserSource {
         await page.mouse.move(640,360);
         if(new URL(page.url()).pathname!==new URL(playerUrl).pathname||!nexaEpisodeConfirmed(await page.locator('body').innerText(),video))return {status:'web-only',streams:[],pageUrl:playerUrl,message:'O número exato do episódio não foi confirmado no reprodutor.'};
         stage='nexa-media-validation';
-        const verified=await verifyCandidates(candidates);
+        const verified=await verifyCandidates(candidates,page);
         console.info(JSON.stringify({event:'provider_media',provider:provider.id,candidates:candidates.length,verified:verified.length}));
         return {status:verified.length?'resolved':'web-only',streams:verified,pageUrl:playerUrl,message:verified.length?'Vídeo direto verificado no servidor.':'Título identificado, mas o vídeo direto desta fonte não foi confirmado.'};
       }
@@ -180,8 +180,20 @@ export class BrowserSource {
     }
   }
 }
-async function verifyCandidates(candidates) {
-  return (await Promise.all(candidates.slice(0,2).map(c=>validateMedia(c)))).filter(Boolean);
+async function verifyCandidates(candidates,page) {
+  const checked=new Set();
+  for(let pass=0;pass<5&&checked.size<6;pass++) {
+    // Audio-only playlists and capability probes can arrive before the video.
+    // Check later captured candidates as well, with only two HTTP checks at once.
+    const batch=candidates.filter(c=>!checked.has(c.url)).slice(0,Math.min(2,6-checked.size));
+    for(const c of batch)checked.add(c.url);
+    const verified=(await Promise.all(batch.map(c=>validateMedia(c)))).filter(Boolean);
+    if(verified.length)return verified;
+    if(candidates.some(c=>!checked.has(c.url)))continue;
+    if(!page||pass>=4)break;
+    await page.waitForResponse(r=>!checked.has(r.url())&&r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:1800}).catch(()=>{});
+  }
+  return [];
 }
 export function hasChallenge(title, text) {
   return /just a moment|checking your browser|verifying your browser|making sure you.re not a bot|attention required.*cloudflare|verify you are human|complete the security check|performing security verification|protect against malicious bots/i.test(`${title} ${text}`);

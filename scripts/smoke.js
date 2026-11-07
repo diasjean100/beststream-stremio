@@ -2,7 +2,7 @@ import {createAddon} from '../src/addon.js';
 const addon=createAddon();
 let failed=false;
 try {
-  for(const [type,id] of [['movie','tt0133093'],['series','tt0903747:1:1'],['series','tt0903747:2:3']]) {
+  for(const [type,id] of [['movie','tt0133093'],['movie','tt1375666'],['series','tt0903747:1:1'],['series','tt0903747:2:3']]) {
     const started=Date.now();
     const result=await addon.resolve(type,id);
     // Never log signed source URLs, tickets, IPs or cookies.

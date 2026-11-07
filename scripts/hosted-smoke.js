@@ -1,10 +1,10 @@
 // Verify the deployed add-on and fetch actual video prefixes from a second host.
 // Signed media URLs and source headers are deliberately not logged.
-import {json,request} from '../src/network.js';
-import {validateMedia,videoPrefix} from '../src/media.js';
+import {json} from '../src/network.js';
+import {validateMedia} from '../src/media.js';
 const base='https://beststream-stremio-jean.onrender.com';
 let failures=0;
-for(const [type,id] of [['movie','tt0133093'],['series','tt0903747:1:1'],['series','tt0903747:2:3']]) {
+for(const [type,id] of [['movie','tt0133093'],['movie','tt1375666'],['series','tt0903747:1:1'],['series','tt0903747:2:3']]) {
   const started=Date.now();
   try{
     const data=await json(`${base}/native/stream/${type}/${id}.json`,{timeout:80_000});

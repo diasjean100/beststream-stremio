@@ -2,7 +2,7 @@
 
 Add-on em português com busca de filmes e séries pelo IMDb, página de instalação e diretório de fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/).
 
-**Estado: preview 0.2. Reprodução direta ainda exige validação ao vivo. Não há cobertura confirmada de todos os sites, filmes ou episódios.**
+**Estado: beta 0.3. O Render retornou vídeos HLS diretos para The Matrix e Breaking Bad S1E1; as playlists também responderam fora do servidor. A instalação recomenda o modo Direto. Não há cobertura confirmada de todos os sites, filmes ou episódios.**
 
 ## O que está implementado
 
@@ -19,7 +19,7 @@ Add-on em português com busca de filmes e séries pelo IMDb, página de instala
 
 O BestFreeStreaming **não hospeda vídeos**; é um diretório de serviços diferentes. Não existe uma API única de vídeos confirmada nessa página. Cada integração precisa de manutenção e testes próprios. O adaptador não resolve CAPTCHAs, não remove DRM e não contorna autenticação. Links podem expirar ou depender do IP e do navegador. Uma playlist respondendo no servidor não garante reprodução em outro IP ou aparelho.
 
-O modo Fontes pode aparecer para qualquer título IMDb válido, mas seu botão **“Abrir fontes” abre o navegador**. O modo Direto retorna uma lista vazia quando não confirma um vídeo. Não usamos páginas HTML, iframes ou vídeos de demonstração como se fossem o filme solicitado.
+O modo padrão aguarda até 22 segundos pelo vídeo antes de oferecer alternativas. O modo Direto aguarda a resolução da fonte e retorna somente mídia. O botão **“Abrir fontes” abre o navegador**. O modo Direto retorna uma lista vazia quando não confirma um vídeo. Não usamos páginas HTML, iframes ou vídeos de demonstração como se fossem o filme solicitado.
 
 ## Executar
 
@@ -38,7 +38,7 @@ Abra `http://localhost:7000`. Para instalar, use a página ou cole um dos endere
 - Fontes: `http://localhost:7000/manifest.json`
 - Somente direto: `http://localhost:7000/native/manifest.json`
 
-Na hospedagem, troque o endereço local pela URL HTTPS real fornecida pelo Render. **Nenhum endereço público de instalação está confirmado antes do deploy.**
+Instalação publicada: https://beststream-stremio-jean.onrender.com/ — o botão recomenda o manifesto https://beststream-stremio-jean.onrender.com/native/manifest.json.
 
 ## Render
 
@@ -51,12 +51,12 @@ O plano gratuito tem recursos e franquias limitados, pode suspender o serviço p
 ## Verificações
 
 ```sh
-npm test       # dezesseis grupos de testes locais, sem depender das fontes externas
+npm test       # dezenove grupos de testes locais, sem depender das fontes externas
 npm run check  # sintaxe de todos os arquivos JavaScript
 npm run smoke  # teste real: filme + episódio; falha se não houver vídeo direto
 ```
 
-O GitHub Actions executa os testes locais. A verificação separada de fonte ao vivo é manual para evitar consultas repetidas aos sites que exigem verificação. Falha nesse teste significa que a integração não foi validada; os testes com fixtures não substituem esse resultado. Não são registrados links assinados, cookies nem tickets das fontes nos logs do smoke.
+O GitHub Actions executa os testes locais. O smoke ao vivo pode ser disparado manualmente e quando o próprio roteiro de smoke muda; não executa consultas a cada alteração comum. Falha nesse teste significa que a integração não foi validada; os testes com fixtures não substituem esse resultado. Não são registrados links assinados, cookies nem tickets das fontes nos logs do smoke.
 
 Consulte [o registro de validação](docs/VALIDATION.md) para saber exatamente o que foi observado.
 
