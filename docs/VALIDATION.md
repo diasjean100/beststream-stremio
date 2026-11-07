@@ -1,51 +1,68 @@
-# Validação atual — 06/11/2026
+# Validação — BestStream 0.3.1
+
+Registro atualizado em 07/11/2026. Resultados de rede descrevem as amostras e as conexões utilizadas, sem garantia de todo o catálogo ou disponibilidade futura.
 
 ## Publicação confirmada
 
 - Página: https://beststream-stremio-jean.onrender.com/
-- Manifesto padrão: https://beststream-stremio-jean.onrender.com/manifest.json
+- Instalação recomendada: https://beststream-stremio-jean.onrender.com/native/manifest.json
 - Repositório: https://github.com/diasjean100/beststream-stremio
 - Render: serviço srv-dbn6mlrrjlhs739lhaug, plano Free, região Virginia.
-- Deploy dep-dbn77guc6qcc73cs1200 concluído com estado live.
-- Código publicado: d1dae583191f48541428abac6cf9f5760e99cb2b, versão 0.2.0. Este relatório foi atualizado sem alterar o código do serviço.
+- Deploy dep-dbn88gd6e07s73dtuk3g com estado live.
+- Código da produção: db36244781206a41e7f729ae1592cf642cc84f9d, versão 0.3.1.
+- O relatório e os ajustes de documentação posteriores não alteram o código do serviço.
 
-## Verificações concluídas
+## Problemas corrigidos
 
-1. Dezesseis grupos de testes locais passaram. Cobrem IDs e episódios, rede privada, cache, diretório, validação de mídia, mapeamento IMDb/TMDB, fontes externas, protocolo HTTP e buscas com acentos, ampersand e percentual.
-2. A verificação de sintaxe passou. O GitHub Actions concluiu os checks de código com sucesso.
-3. O render.yaml passou na validação com o JSON Schema oficial do Render. A imagem Docker foi construída e publicada.
-4. /healthz, /manifest.json, /api/sources e busca de filmes responderam HTTP 200, com CORS. Matrix retornou 20 títulos.
-5. O diretório ao vivo retornou 55 entradas. A inspeção das páginas está em [SOURCES.md](SOURCES.md). Resposta de uma página não foi tratada como prova de disponibilidade de vídeo.
-6. A página de instalação, o botão de copiar, a troca de modo, o endereço stremio:// e o filtro foram verificados no navegador.
+A navegação podia esgotar o prazo mesmo depois de o título e os controles do player aparecerem. A integração agora exige a identidade exata do título e do episódio, sem depender do evento de carregamento completo da página. Um clique Play que já virou Pause também deixa de ser tratado como falha de reprodução.
 
-## Reprodução no navegador da fonte
+O modo comum aguarda até 22 segundos pelo vídeo na primeira consulta. O modo Direto retorna somente mídia validada e é a opção selecionada na página de instalação. Nenhum link HTML ou iframe é apresentado como vídeo.
 
-| Amostra | Observação |
-| --- | --- |
-| The Matrix, tt0133093, TMDB 603 | Reprodução por 124 segundos; duração indicada de 8179 segundos, readyState 4 e nenhum erro de mídia |
-| Breaking Bad S1 E1, tt0903747:1:1, TMDB 1396 | Página identificada como Breaking Bad S1 E1; reprodução por 317 segundos; duração de 3502 segundos, readyState 4 e nenhum erro de mídia |
+A validação HLS consulta a playlist, uma variante quando existir e o início de um segmento. Os bytes precisam corresponder a vídeo; áudio isolado, HTML, segmentos recusados e formatos DRM não suportados são descartados. O adaptador considera candidatos que chegam depois das primeiras playlists de áudio, com até duas verificações de mídia simultâneas. Os cabeçalhos Referer, Origin e User-Agent observados no player são preservados quando necessários.
 
-Esses testes confirmam apenas as duas amostras naquele navegador. Não confirmam todo o catálogo, todos os sites, disponibilidade futura, áudio em português ou reprodução dentro de um aplicativo Stremio.
+O navegador usa contextos isolados e é reutilizado entre consultas próximas. A abertura da página de instalação prepara o navegador, sem consultar a fonte. Após 45 segundos sem uso, o navegador é fechado para liberar memória.
 
-## Resultado do add-on hospedado
+## Código e protocolo
 
-| Caso | Endpoint padrão | Apenas vídeo direto |
-| --- | --- | --- |
-| The Matrix | HTTP 200; Nexa no navegador e acesso ao diretório | HTTP 200; nenhum stream direto retornado |
-| Breaking Bad S1 E1 | HTTP 200; Nexa no navegador e acesso ao diretório | HTTP 200; nenhum stream direto retornado |
+Dezenove grupos de testes locais passaram, assim como a verificação de sintaxe e o job de protocolo do GitHub Actions. Cobrem IDs e episódios, rede privada, cache, diretório, conteúdo de mídia, variantes HLS, segmentos com extensão de imagem, cabeçalhos, mapeamento IMDb/TMDB, protocolo HTTP, Unicode e retorno de vídeo na primeira consulta.
 
-O BingeBang apresentou verificação do Cloudflare ao servidor. A tentativa Nexa no servidor esgotou o tempo de navegação, apesar da reprodução nos testes independentes de navegador. Isso não prova que todos os sites estejam bloqueados: apenas duas integrações de reprodução foram implementadas; as demais são links de diretório.
+O render.yaml foi validado anteriormente com o JSON Schema oficial do Render. A imagem Docker foi construída e publicada. O manifesto nativo, a versão e o commit foram conferidos no serviço. A página de instalação foi verificada no navegador, com o modo Direto selecionado e o endereço stremio:// correspondente.
 
-Nenhum bloqueio foi contornado. Links temporários de teste, cookies de conta e credenciais não foram incorporados ao projeto.
+## Teste da produção a partir de outro servidor
 
-## Limites do resultado
+O workflow só iniciou as consultas depois de confirmar a versão 0.3.1 e o commit exato em /healthz. Ele pediu os streams ao Render e consultou as playlists e os trechos de vídeo a partir do runner do GitHub.
 
-**A versão atual não cumpre a reprodução direta de todos os filmes, séries e fontes dentro do Stremio.** O modo Fontes oferece páginas externas pelo mapeamento IMDb/TMDB e uma lista de sites. Ele não transforma 55 entradas em 55 extratores nativos. O modo Direto continua experimental e pode retornar uma lista vazia.
+Execução: https://github.com/diasjean100/beststream-stremio/actions/runs/42326295962
 
-A instalação no Stremio do usuário e a reprodução em Windows, Android, Samsung, LG ou outro cliente real não foram executadas nesta sessão. Uma playlist respondendo no servidor, quando houver, também não garante funcionamento em outro IP.
+| Amostra | Streams diretos do Render | Mídias validadas no segundo servidor | Tempo observado da consulta e validação |
+| --- | ---: | ---: | ---: |
+| The Matrix — tt0133093 | 2 | 2 | 21,2 s |
+| Inception — tt1375666 | 2 | 2 | 21,0 s |
+| Breaking Bad S1 E1 — tt0903747:1:1 | 2 | 2 | 20,0 s |
+| Breaking Bad S2 E3 — tt0903747:2:3 | 2 | 2 | 18,3 s |
 
-## Hospedagem e atualizações
+O workflow terminou com sucesso. Os tempos descrevem esses testes; não são uma promessa de latência. O primeiro acesso após a suspensão do Render pode demorar mais.
 
-O projeto não retransmite filmes pelo Render e não configura recursos pagos. O plano Free continua sujeito às franquias e à suspensão por ociosidade descritas em https://render.com/docs/free.
+## Diferenças entre conexões
 
-As atualizações desta sessão precisaram de disparo manual de deploy depois do push; um webhook funcional de atualização automática não foi confirmado. Antes de divulgar nova versão, conferir o commit e o estado live no Render e repetir os testes correspondentes.
+O teste separado que executa o próprio extrator inteiramente no runner do GitHub retornou mídia para Matrix, Inception e Breaking Bad S1E1, mas não validou mídia para S2E3. Esse job terminou com falha. O mesmo episódio foi validado pelo endpoint da produção e por seu teste a partir do segundo servidor. A causa exata dessa diferença não foi comprovada.
+
+Na conexão local de análise, pedidos de segmentos ao CDN receberam HTTP 403; isso não foi contornado. Não é possível concluir que o vídeo funcionará em toda rede ou aparelho a partir dos testes entre servidores.
+
+O BingeBang exigiu verificação do Cloudflare e continua sem reprodução direta confirmada. Nenhum CAPTCHA, autenticação, DRM ou bloqueio de segurança foi contornado.
+
+## Alcance e limites
+
+A integração funcional de vídeo demonstrada é a Nexa, com mapeamento IMDb/TMDB e episódio exato. A lista de 55 sites continua sendo um diretório: não representa 55 extratores nativos. Não há confirmação de todos os filmes, séries ou episódios do BestFreeStreaming.
+
+A reprodução em um aplicativo Stremio real no dispositivo do usuário não foi executada. A inspeção de playlists e trechos de vídeo valida o protocolo e os bytes de mídia, mas não verifica a reprodução completa, cada faixa de áudio, legendas ou compatibilidade de Windows, Android ou TVs. A identificação do título usa os IDs e a página da fonte; não foi feita uma comparação visual integral de cada filme.
+
+Os testes anteriores no navegador da fonte reproduziram Matrix por 124 segundos e Breaking Bad S1E1 por 317 segundos, sem erro de mídia. Esses testes são distintos da reprodução nativa do add-on.
+
+## Hospedagem
+
+O projeto não retransmite filmes completos pelo Render: faz consultas e lê pequenos prefixos de segmentos para validar mídia. A reprodução usa a fonte externa. Não foram configurados recursos pagos.
+
+O plano Free continua sujeito a suspensão por ociosidade, recursos e franquias da conta: https://render.com/docs/free. As atualizações desta sessão exigiram deploy manual após o push. Um webhook funcional de atualização automática não foi confirmado.
+
+Os links temporários de vídeo ficam em cache curto e não são gravados no repositório. Cookies de conta e credenciais não foram incorporados ao projeto ou aos logs de teste.

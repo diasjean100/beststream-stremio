@@ -13,7 +13,7 @@ Consulta realizada no GitHub Actions, com requisições GET às páginas de entr
 | FlaxJoy | HTTP 200; FlaxJoy — Watch Movies and TV Shows Free | Não implementada; link de navegador |
 | Fprime | HTTP 200; fprime - Watch Movies & TV Shows Online in HD | Não implementada; link de navegador |
 | Reelix | HTTP 200; Reelix - Watch Movies, TV Shows & Anime Free in HD | Não implementada; link de navegador |
-| Nexa | HTTP 200; Nexa | Adaptador experimental; sem garantia de reprodução |
+| Nexa | HTTP 200; Nexa | Integração de vídeo HLS validada para amostras de filmes e episódios; cobertura e acesso variam |
 | MoviePal | HTTP 200; MoviePal - Your Pal for Free Movies and TV Shows Online | Não implementada; link de navegador |
 | Watched | HTTP 200; Home · watched | Não implementada; link de navegador |
 | ZXCStream | HTTP 200; STREAM | Não implementada; link de navegador |

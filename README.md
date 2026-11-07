@@ -2,7 +2,7 @@
 
 Add-on em português com busca de filmes e séries pelo IMDb, página de instalação e diretório de fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/).
 
-**Estado: beta 0.3. O Render retornou vídeos HLS diretos para The Matrix e Breaking Bad S1E1; as playlists também responderam fora do servidor. A instalação recomenda o modo Direto. Não há cobertura confirmada de todos os sites, filmes ou episódios.**
+**Estado: beta 0.3.1. O teste da produção validou vídeos HLS de The Matrix, Inception e dois episódios de Breaking Bad, incluindo trechos binários consultados a partir de um segundo servidor. A instalação recomenda o modo Direto. A disponibilidade varia por conexão; veja o relatório de testes. Não há cobertura confirmada de todos os sites, filmes ou episódios.**
 
 ## O que está implementado
 
@@ -11,9 +11,9 @@ Add-on em português com busca de filmes e séries pelo IMDb, página de instala
 - Dois modos: **Fontes**, com acesso ao navegador, e **Direto**, que só retorna mídia quando a verificação passa.
 - Busca de títulos pelo Cinemeta. A busca não comprova a disponibilidade de vídeo na fonte. O modo Fontes oferece também a página do título ou episódio no Nexa, identificada como navegação externa e sem afirmar disponibilidade.
 - Lista de referência de 55 entradas da página inicial, consultada em 06/11/2026, e tentativa de atualização do diretório a cada 12 horas. Sites listados não são 55 extratores implementados.
-- Adaptadores experimentais: BingeBang para busca por título e episódio; Nexa para filmes e episódios com o TMDB associado ao IMDb pelo Cinemeta. Vídeo direto exige verificação do conteúdo HLS/MP4. URLs temporárias não são gravadas no código.
+- Adaptadores experimentais: BingeBang para busca por título e episódio; Nexa para filmes e episódios com o TMDB associado ao IMDb pelo Cinemeta. Vídeo HLS exige validação da playlist, de uma variante e de um trecho binário de vídeo. HTML, áudio isolado e segmentos recusados são descartados. URLs temporárias não são gravadas no código.
 - Os demais sites são links externos. Abertura do site, extração de vídeo, validação HTTP e reprodução no aparelho são etapas diferentes.
-- Cache limitado, isolamento de consultas do navegador, limite de requisições e bloqueio de destinos privados nas requisições do servidor.
+- Cache limitado, contextos isolados e navegador reutilizado por até 45 segundos de inatividade, limite de requisições e bloqueio de destinos privados nas requisições do servidor.
 
 ## Limitação central
 
@@ -53,10 +53,10 @@ O plano gratuito tem recursos e franquias limitados, pode suspender o serviço p
 ```sh
 npm test       # dezenove grupos de testes locais, sem depender das fontes externas
 npm run check  # sintaxe de todos os arquivos JavaScript
-npm run smoke  # teste real: filme + episódio; falha se não houver vídeo direto
+npm run smoke  # teste real: dois filmes + dois episódios; falha se não houver vídeo direto
 ```
 
-O GitHub Actions executa os testes locais. O smoke ao vivo pode ser disparado manualmente e quando o próprio roteiro de smoke muda; não executa consultas a cada alteração comum. Falha nesse teste significa que a integração não foi validada; os testes com fixtures não substituem esse resultado. Não são registrados links assinados, cookies nem tickets das fontes nos logs do smoke.
+O GitHub Actions executa os testes locais. O roteiro scripts/hosted-smoke.js verifica a produção a partir de outro servidor e espera pelo commit da publicação; o teste final da versão 0.3.1 passou nas quatro amostras. O extrator executado inteiramente no runner teve uma amostra sem mídia, conforme o relatório de validação. O smoke ao vivo pode ser disparado manualmente e quando o próprio roteiro de smoke muda; não executa consultas a cada alteração comum. Falha nesse teste significa que a integração não foi validada; os testes com fixtures não substituem esse resultado. Não são registrados links assinados, cookies nem tickets das fontes nos logs do smoke.
 
 Consulte [o registro de validação](docs/VALIDATION.md) para saber exatamente o que foi observado.
 
