@@ -67,7 +67,7 @@ export class BrowserSource {
         const hls=/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(mime);
         if(response.status()<400 && (mediaUrl(url)||hls) && !/trailer|preview|youtube/i.test(url) && !candidates.some(c=>c.url===url)) {
           const requestHeaders=response.request().headers();
-          candidates.push({url,...(hls?{format:'HLS'}:{}),headers:{...(requestHeaders.referer?{Referer:requestHeaders.referer}:{}),...(requestHeaders['user-agent']?{'User-Agent':requestHeaders['user-agent']}:{})}});
+          candidates.push({url,...(hls?{format:'HLS'}:{}),headers:{...(requestHeaders.referer?{Referer:requestHeaders.referer}:{}),...(requestHeaders.origin?{Origin:requestHeaders.origin}:{}),...(requestHeaders['user-agent']?{'User-Agent':requestHeaders['user-agent']}:{})}});
         }
       });
       if(provider.id==='nexa-mov') {

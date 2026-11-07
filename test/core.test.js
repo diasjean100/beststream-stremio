@@ -4,7 +4,7 @@ import {Cache} from '../src/cache.js';
 import {publicAddress,publicTarget} from '../src/network.js';
 import {parseVideo,metadata} from '../src/metadata.js';
 import {BOOTSTRAP,parseDirectory} from '../src/directory.js';
-import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject} from '../src/media.js';
+import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject,videoPrefix} from '../src/media.js';
 import {sameIdentity,hasChallenge,nexaPlaybackUrl,nexaEpisodeConfirmed,normalize} from '../src/browser-source.js';
 import {createAddon,manifest} from '../src/addon.js';
 import {createServer} from '../src/server.js';
@@ -40,9 +40,11 @@ test('HTML, iframe pages, DRM and fake playlists are never direct streams',async
   assert.equal(validHls('#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES\n#EXTINF:4\na.ts'),false);
   assert.equal(await validateMedia({url:'https://example.com/a.m3u8'},async()=>({status:200,body:Buffer.from('<html>blocked</html>'),headers:{}})),null);
   assert.equal(await validateMedia({url:'https://example.com/a.mp4'},async()=>({status:403,body:Buffer.from('denied'),headers:{}})),null);
-  const verified=await validateMedia({url:'https://example.com/a.m3u8'},async()=>({status:200,url:'https://example.com/a.m3u8',body:Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts'),headers:{}}));
+  const ts=Buffer.alloc(1024);ts[0]=ts[188]=ts[376]=0x47;
+  const mediaFixture=async url=>({status:200,url,body:url.endsWith('a.ts')?ts:Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts'),headers:{}});
+  const verified=await validateMedia({url:'https://example.com/a.m3u8'},mediaFixture);
   assert.equal(verified.format,'HLS');
-  const noExtension=await validateMedia({url:'https://example.com/playlist?token=test',format:'HLS'},async()=>({status:200,url:'https://example.com/playlist?token=test',body:Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts'),headers:{}}));
+  const noExtension=await validateMedia({url:'https://example.com/playlist?token=test',format:'HLS'},mediaFixture);
   assert.equal(noExtension.format,'HLS');
   assert.equal(await validateMedia({url:'file:///etc/passwd',format:'HLS'},async()=>{throw Error('must not fetch')}),null);
   assert.equal(await validateMedia({url:'https://example.com/a.mp4'},async()=>({status:200,body:Buffer.from('<html>blocked</html>'),headers:{'content-type':'video/mp4'}})),null);
@@ -161,4 +163,26 @@ test('the first ordinary Stremio request includes native video when resolution f
   const first=await addon.streams('movie','tt0133093','https://addon.test');
   assert.equal(first.streams[0].url,'https://cdn.test/movie.m3u8');
   assert.equal(first.streams[0].externalUrl,undefined);
+});
+
+
+test('HLS requires a real video segment, including disguised image paths',async()=>{
+  const ts=Buffer.alloc(1024);ts[0]=ts[188]=ts[376]=0x47;
+  assert.equal(videoPrefix(ts),true);
+  assert.equal(videoPrefix(Buffer.alloc(1024)),false);
+  const playlist=Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nsegment.png');
+  const candidate={url:'https://media.test/title.m3u8',headers:{Origin:'https://source.test'}};
+  for(const status of [403,404])assert.equal(await validateMedia(candidate,async url=>({status:url.endsWith('.png')?status:200,url,headers:{},body:playlist})),null);
+  const calls=[];
+  const result=await validateMedia(candidate,async(url,options)=>{calls.push({url,options});return {status:200,url,headers:{},body:url.endsWith('.png')?ts:playlist};});
+  assert.ok(result);assert.equal(calls[1].options.prefixBytes,65536);assert.equal(calls[1].options.headers.Origin,'https://source.test');
+  assert.equal(calls[1].options.headers.Range,undefined);
+});
+
+test('HLS master validation follows its variant and rejects a non-video segment',async()=>{
+  const master=Buffer.from('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2000000\n720/index.m3u8');
+  const media=Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n1.ts');
+  const paths=[];
+  const result=await validateMedia({url:'https://media.test/master.m3u8'},async url=>{paths.push(url);return {status:200,url,headers:{},body:url.endsWith('master.m3u8')?master:url.endsWith('index.m3u8')?media:Buffer.alloc(1024)};});
+  assert.equal(result,null);assert.deepEqual(paths,['https://media.test/master.m3u8','https://media.test/720/index.m3u8','https://media.test/720/1.ts']);
 });

@@ -1,0 +1,23 @@
+// Verify the deployed add-on and fetch actual video prefixes from a second host.
+// Signed media URLs and source headers are deliberately not logged.
+import {json,request} from '../src/network.js';
+import {validateMedia,videoPrefix} from '../src/media.js';
+const base='https://beststream-stremio-jean.onrender.com';
+let failures=0;
+for(const [type,id] of [['movie','tt0133093'],['series','tt0903747:1:1'],['series','tt0903747:2:3']]) {
+  const started=Date.now();
+  try{
+    const data=await json(`${base}/native/stream/${type}/${id}.json`,{timeout:80_000});
+    const streams=(data.streams||[]).filter(s=>s.url);
+    let verified=0;
+    for(const s of streams.slice(0,2)){
+      const candidate={url:s.url,format:'HLS',headers:s.behaviorHints?.proxyHeaders?.request||{}};
+      if(await validateMedia(candidate))verified++;
+    }
+    console.log(JSON.stringify({event:'hosted_video_check',type,id,streams:streams.length,verifiedFromSecondHost:verified,elapsedMs:Date.now()-started}));
+    if(!verified)failures++;
+  }catch(error){
+    console.log(JSON.stringify({event:'hosted_video_check',type,id,error:error.name,elapsedMs:Date.now()-started}));failures++;
+  }
+}
+if(failures)process.exitCode=1;

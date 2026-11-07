@@ -23,7 +23,7 @@ export async function publicTarget(value, lookupFn = lookup) {
   return {url, records};
 }
 
-export async function request(url, {timeout=9000,maxBytes=2_000_000,headers={},redirects=4,signal}={}) {
+export async function request(url, {timeout=9000,maxBytes=2_000_000,prefixBytes=0,headers={},redirects=4,signal}={}) {
   const target = await publicTarget(url);
   const response = await new Promise((resolve,reject) => {
     const transport = target.url.protocol === 'https:' ? https : http;
@@ -37,9 +37,16 @@ export async function request(url, {timeout=9000,maxBytes=2_000_000,headers={},r
       }
     }, res => {
       const chunks=[]; let size=0;
-      res.on('data', chunk => { size+=chunk.length; if(size>maxBytes) res.destroy(new Error('Resposta excede o limite')); else chunks.push(chunk); });
+      const result=()=>({status:res.statusCode,headers:res.headers,body:Buffer.concat(chunks),url:target.url.href});
+      res.on('data', chunk => {
+        if(prefixBytes>0) {
+          const remaining=Math.min(prefixBytes,maxBytes)-size;
+          chunks.push(chunk.subarray(0,Math.max(0,remaining)));size+=Math.min(chunk.length,Math.max(0,remaining));
+          if(size>=Math.min(prefixBytes,maxBytes)){resolve(result());res.destroy();}
+        } else {size+=chunk.length;if(size>maxBytes)res.destroy(new Error('Resposta excede o limite'));else chunks.push(chunk);}
+      });
       res.on('error',reject);
-      res.on('end',() => resolve({status:res.statusCode,headers:res.headers,body:Buffer.concat(chunks),url:target.url.href}));
+      res.on('end',() => resolve(result()));
     });
     req.setTimeout(timeout,()=>req.destroy(new Error('Tempo de rede esgotado')));
     req.on('error',reject); req.end();
@@ -49,7 +56,7 @@ export async function request(url, {timeout=9000,maxBytes=2_000_000,headers={},r
     const next=new URL(response.headers.location,target.url);
     // Never forward cookies or other source headers to an unrelated origin.
     const nextHeaders = next.origin===target.url.origin ? headers : Object.fromEntries(Object.entries(headers).filter(([k])=>!['cookie','authorization'].includes(k.toLowerCase())));
-    return request(next,{timeout,maxBytes,headers:nextHeaders,redirects:redirects-1,signal});
+    return request(next,{timeout,maxBytes,prefixBytes,headers:nextHeaders,redirects:redirects-1,signal});
   }
   return response;
 }
