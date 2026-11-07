@@ -1,7 +1,7 @@
 import { publicTarget } from './network.js';
 import { mediaUrl, playerIdentity, validateMedia } from './media.js';
 
-const TIMEOUT=32_000;
+const TIMEOUT=50_000;
 export const normalize=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 export function sameIdentity(identity, video) {
   return identity?.imdb===video.imdb && (video.type==='movie'?identity.season===0&&identity.episode===0:identity.season===video.season&&identity.episode===video.episode);
@@ -73,10 +73,10 @@ export class BrowserSource {
       if(provider.id==='nexa-mov') {
         stage='nexa-navigation';
         const playerUrl=nexaPlaybackUrl(video,meta);
-        await page.goto(playerUrl,{waitUntil:'domcontentloaded'});
-        stage='nexa-load';
-        await page.waitForLoadState('load',{timeout:6500}).catch(()=>{});
-        if(await challenge(page))return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
+        // Streaming pages can keep a parser-blocking resource pending even after
+        // their player is usable. Wait for the response, then the exact title,
+        // instead of using DOMContentLoaded/load as a playback readiness signal.
+        await page.goto(playerUrl,{waitUntil:'commit',timeout:15_000});
         const dialog=page.getByRole('dialog');
         if(await dialog.count()) {
           const close=dialog.getByRole('button',{name:/^(Close|Got it|Dismiss|OK)$/i}).first();
@@ -87,7 +87,8 @@ export class BrowserSource {
         await page.waitForFunction(name=>{
           const clean=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
           return Array.from(document.querySelectorAll('h1')).some(h=>clean(h.textContent||h.querySelector('img')?.alt||'')===clean(name));
-        },video.type==='series'?`${meta.name} S${video.season} E${video.episode}`:meta.name,{timeout:10000});
+        },video.type==='series'?`${meta.name} S${video.season} E${video.episode}`:meta.name,{timeout:20_000});
+        if(await challenge(page))return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
         stage='nexa-play';
         const play=page.getByRole('button',{name:'Play',exact:true}).first();
         if(await play.isVisible().catch(()=>false))await play.click();
@@ -97,6 +98,7 @@ export class BrowserSource {
         if(new URL(page.url()).pathname!==new URL(playerUrl).pathname||!nexaEpisodeConfirmed(await page.locator('body').innerText(),video))return {status:'web-only',streams:[],pageUrl:playerUrl,message:'O número exato do episódio não foi confirmado no reprodutor.'};
         stage='nexa-media-validation';
         const verified=await verifyCandidates(candidates);
+        console.info(JSON.stringify({event:'provider_media',provider:provider.id,candidates:candidates.length,verified:verified.length}));
         return {status:verified.length?'resolved':'web-only',streams:verified,pageUrl:playerUrl,message:verified.length?'Vídeo direto verificado no servidor.':'Título identificado, mas o vídeo direto desta fonte não foi confirmado.'};
       }
       stage='homepage';
