@@ -76,7 +76,12 @@ export class BrowserSource {
         // Streaming pages can keep a parser-blocking resource pending even after
         // their player is usable. Wait for the response, then the exact title,
         // instead of using DOMContentLoaded/load as a playback readiness signal.
-        await page.goto(playerUrl,{waitUntil:'commit',timeout:15_000});
+        await page.goto(playerUrl,{waitUntil:'commit',timeout:5000}).catch(error=>{
+          // Chromium on small hosts can miss/delay the navigation event while
+          // already rendering the requested document. The exact title and
+          // episode checks below remain mandatory before returning any media.
+          if(error.name!=='TimeoutError'||page.url()!==playerUrl)throw error;
+        });
         const dialog=page.getByRole('dialog');
         if(await dialog.count()) {
           const close=dialog.getByRole('button',{name:/^(Close|Got it|Dismiss|OK)$/i}).first();
@@ -159,7 +164,7 @@ export class BrowserSource {
       }
       return {status:'not-found',streams:[],message:'O título e episódio exatos não foram confirmados nesta fonte.'};
     } catch(error) {
-      console.warn(JSON.stringify({event:'provider_failure',provider:provider.id,stage,error:error.name}));
+      console.warn(JSON.stringify({event:'provider_failure',provider:provider.id,stage,error:error.name,detail:error.message.split('\n')[0].replace(/https?:\/\/\S+/g,'[source]').slice(0,180)}));
       if(page && !page.isClosed()) {
         // Public UI diagnostics only. Never dump cookies, source URLs or page scripts.
         const state=await page.evaluate(()=>({title:document.title,headings:Array.from(document.querySelectorAll('h1,h2')).slice(0,8).map(h=>h.innerText),buttons:Array.from(document.querySelectorAll('button')).slice(0,20).map(b=>b.getAttribute('aria-label')||b.innerText)})).catch(()=>null);

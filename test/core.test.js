@@ -138,7 +138,7 @@ test('provider fallback uses exact mapped source and preserves confirmed webpage
 test('browser-source card remains available while direct resolution is still pending',async()=>{
   let finish;
   const pending=new Promise(resolve=>{finish=resolve;});
-  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:()=>pending,close:async()=>{}}});
+  const addon=createAddon({streamWaitMs:1,getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:()=>pending,close:async()=>{}}});
   const r=await addon.streams('movie','tt0063350','https://addon.test');
   assert.equal(r.streams[0].externalUrl,'https://addon.test/watch/movie/tt0063350');
   finish({status:'not-found',streams:[]});
@@ -151,4 +151,14 @@ test('mapped browser sources use movie and episode URLs without claiming direct 
   assert.match(r.streams[0].title,/não confirmada/);assert.equal(r.streams[0].url,undefined);
   const native=await addon.streams('series','tt0903747:2:3','https://addon.test',true);
   assert.deepEqual(native.streams,[]);
+});
+
+test('the first ordinary Stremio request includes native video when resolution finishes',async()=>{
+  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:async()=>{
+    await new Promise(resolve=>setTimeout(resolve,10));
+    return {status:'resolved',streams:[{url:'https://cdn.test/movie.m3u8',format:'HLS',headers:{}}]};
+  },close:async()=>{}}});
+  const first=await addon.streams('movie','tt0133093','https://addon.test');
+  assert.equal(first.streams[0].url,'https://cdn.test/movie.m3u8');
+  assert.equal(first.streams[0].externalUrl,undefined);
 });

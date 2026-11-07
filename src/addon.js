@@ -4,13 +4,13 @@ import { metadata, parseVideo, search } from './metadata.js';
 import { BrowserSource,nexaPlaybackUrl } from './browser-source.js';
 import { streamObject } from './media.js';
 export function manifest(nativeOnly=false) {
-  return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:'0.2.0',name:nativeOnly?'BestStream • Direto':'BestStream • Fontes',
+  return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:'0.3.0',name:nativeOnly?'BestStream • Direto':'BestStream',
     description:nativeOnly?'Somente vídeos diretos identificados e verificados. Cobertura experimental.':'Busca filmes e séries pelo IMDb. Vídeos diretos quando confirmados e acesso às fontes do BestFreeStreaming pelo navegador.',
     resources:[{name:'stream',types:['movie','series'],idPrefixes:['tt']},'catalog'],types:['movie','series'],
     catalogs:[{type:'movie',id:'beststream-movies',name:'BestStream • Buscar filmes',extra:[{name:'search',isRequired:true},{name:'skip'}]},
       {type:'series',id:'beststream-series',name:'BestStream • Buscar séries',extra:[{name:'search',isRequired:true},{name:'skip'}]}],behaviorHints:{configurable:true}};
 }
-export function createAddon({getDirectory=directory,getMetadata=metadata,browser=new BrowserSource(),getSearch=search}={}) {
+export function createAddon({getDirectory=directory,getMetadata=metadata,browser=new BrowserSource(),getSearch=search,streamWaitMs=22_000}={}) {
   const cache=new Cache(120);
   const getMeta=video=>cache.use(`meta:${video.type}:${video.imdb}`,6*60*60*1000,()=>getMetadata(video));
   return {
@@ -39,8 +39,17 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       if(!video)return {streams:[],cacheMaxAge:10};
       let result;
       if(!nativeOnly) {
-        result=cache.get(`${type}:${id}`)||{streams:[],status:'checking'};
-        if(result.status==='checking')this.resolve(type,id).catch(()=>{});
+        result=cache.get(`${type}:${id}`);
+        if(!result) {
+          let timer;
+          // Give the resolver time to return native video in this first Stremio
+          // request. Keep an external fallback if the provider takes too long.
+          result=await Promise.race([
+            this.resolve(type,id).catch(()=>({streams:[],status:'unavailable'})),
+            new Promise(resolve=>{timer=setTimeout(()=>resolve({streams:[],status:'checking'}),streamWaitMs);})
+          ]);
+          clearTimeout(timer);
+        }
       } else {
         try {result=await this.resolve(type,id);} catch {result={streams:[],status:'metadata-unavailable'};}
       }

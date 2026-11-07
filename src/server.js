@@ -26,7 +26,7 @@ export function createServer(addon=createAddon(),getDirectory=directory) {
     let path;try{path=decodeURIComponent(rawPath);}catch{return send(400,{error:'URL inválida'});}
     const nativeOnly=path.startsWith('/native/');if(nativeOnly)path=path.slice(7);
     try {
-      if(path==='/healthz')return send(200,{ok:true,name:'BestStream',version:'0.2.0'});
+      if(path==='/healthz')return send(200,{ok:true,name:'BestStream',version:'0.3.0',commit:process.env.RENDER_GIT_COMMIT||null});
       if(path==='/manifest.json')return send(200,addon.manifest(nativeOnly));
       if(path==='/api/sources')return send(200,await getDirectory());
       // PUBLIC_BASE_URL or Render's trusted canonical URL prevents forwarded-host poisoning.
