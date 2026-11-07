@@ -1,0 +1,19 @@
+name: Inspect public source interfaces
+on:
+  push:
+    paths:
+      - scripts/inventory.js
+      - .github/workflows/inventory.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/inventory.js
