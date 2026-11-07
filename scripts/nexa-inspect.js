@@ -21,4 +21,13 @@ console.log(JSON.stringify({event:'nexa_entries',paths:entries.map(u=>new URL(u)
 for(const entry of entries.filter(u=>u.includes('/app.')).slice(0,1)){
  const asset=await request(entry,{maxBytes:1_500_000});const code=asset.body.toString();
  console.log(JSON.stringify({event:'nexa_app',status:asset.status,bytes:asset.body.length,code:code.slice(0,22000)}));
+ const paths=[...new Set(Array.from(code.matchAll(/\.\.\/(?:nodes\/22\.[a-zA-Z0-9_-]+|chunks\/CpI1V2AI)\.js/g)).map(m=>new URL(m[0],entry).href))];
+ for(const path of paths){
+  const source=await request(path,{maxBytes:2_000_000});const js=source.body.toString();
+  console.log(JSON.stringify({event:'nexa_route_module',path:new URL(path).pathname,status:source.status,bytes:source.body.length}));
+  for(const term of ['epSlug','tmdb-tv','tmdb-movie','/watch/','season','episode']){
+   let from=0,count=0;
+   while(count<4){const i=js.indexOf(term,from);if(i<0)break;console.log(JSON.stringify({event:'nexa_route_code',term,path:new URL(path).pathname,excerpt:js.slice(Math.max(0,i-170),i+400)}));from=i+term.length;count++;}
+  }
+ }
 }
