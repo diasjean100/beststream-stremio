@@ -270,7 +270,7 @@ export async function moviepalServers(page,candidates,reset,{verify=verifyCandid
   // These are the actual server controls in MoviePal's public player. Keep the
   // already-confirmed title/season/episode page while changing only its source.
   let selected='Alpha';
-  for(const server of ['Charlie','Delta','Echo','Alpha','Beta']) {
+  for(const server of ['Charlie','Alpha','Delta','Beta','Echo']) {
     if(server!==selected) {
       const button=page.getByRole('button',{name:server,exact:true}).first();
       if(!await button.isVisible().catch(()=>false))continue;

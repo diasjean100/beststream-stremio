@@ -27,7 +27,7 @@ Em 13/11/2026 a auditoria reproduziu a imagem do usuário ao decodificar um stre
 
 A validação agora lê no máximo 1 MiB do primeiro segmento, decodifica um quadro com FFmpeg e extrai texto com Tesseract. Avisos identificados como Atlantic, Cloudflare Warp ou classroom.best são rejeitados. Falhas no decodificador ou OCR também impedem a oferta do candidato. Isso verifica o quadro inicial, não identifica integralmente o filme nem garante que um bloqueio não apareça depois ou em outra conexão.
 
-MoviePal tenta os controles reais Charlie, Delta, Echo, Alpha e Beta antes de desistir, preservando a página do título/episódio confirmado. Um aviso rejeitado não é apresentado como uma opção para assistir. A página de instalação também deixou de incluir o link de saída para o diretório e exibe o endereço para instalação manual.
+MoviePal tenta os controles reais Charlie, Alpha, Delta, Beta e Echo antes de desistir, preservando a página do título/episódio confirmado. Um aviso rejeitado não é apresentado como uma opção para assistir. A página de instalação também deixou de incluir o link de saída para o diretório e exibe o endereço para instalação manual.
 
 ## Adaptadores e limites
 

@@ -1,3 +1,5 @@
+A resposta de streams agora aguarda até 55 segundos pelo trabalho já em andamento. O corte anterior de 25 segundos fazia a API devolver vazio enquanto o navegador ainda procurava/validava a alternativa. Isso é uma mudança explícita do orçamento de espera, não uma prova de que toda consulta ficou rápida. A página informa que a primeira busca pode levar até um minuto no serviço gratuito. Os retornos continuam imediatos quando a resolução termina antes desse limite. Alpha fica logo após Charlie, para que a fonte que passou no runner continue alcançável dentro do limite de tempo do navegador.
+
 # Ajuste 0.5.3 — variante de inspeção e atribuição dos players
 
 A 0.5.2 entrou em produção, mas seu teste do primeiro acesso ainda não confirmou os três títulos. A espera do player continua necessária; ele não produziu candidatos no primeiro intervalo de Alpha na hospedagem.

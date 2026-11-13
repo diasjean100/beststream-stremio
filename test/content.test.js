@@ -81,7 +81,7 @@ test('MoviePal switches server after a rejected video without leaving the select
   const candidates=[{url:'https://cdn.test/old.m3u8'}],clicked=[],verified=[];
   const page={frames:()=>[],getByRole:(_role,{name})=>({first:()=>({isVisible:async()=>true,click:async()=>{clicked.push(name);candidates.push({url:`https://cdn.test/${name==='Charlie'?'warning':'control'}.m3u8`});}})})};
   const result=await moviepalServers(page,candidates,()=>{candidates.length=0;},{verify:async(list,_page,{onBlocked})=>{verified.push(list.map(c=>c.url));if(list.some(c=>c.url.includes('/warning.')))onBlocked();return list.filter(c=>c.url.includes('/control.'));}});
-  assert.deepEqual(clicked,['Charlie','Delta']);assert.equal(result[0].url,'https://cdn.test/control.m3u8');
+  assert.deepEqual(clicked,['Charlie','Alpha']);assert.equal(result[0].url,'https://cdn.test/control.m3u8');
   assert.deepEqual(verified,[['https://cdn.test/warning.m3u8'],['https://cdn.test/control.m3u8']]);
 });
 
