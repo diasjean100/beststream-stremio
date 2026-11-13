@@ -21,7 +21,7 @@ test('full HTTP path goes from stream selection to native playlist and video byt
   const relay=new MediaRelay({open:async(url,options)=>{calls.push({url,options});return {status:200,url,headers:{'content-type':url.includes('.m3u8')?'application/vnd.apple.mpegurl':'video/mp2t'},body:Readable.from([url.includes('.m3u8')?Buffer.from(playlist):ts])};}});
   const server=createServer(addon,fixtureDirectory,{relay});const base=await listen(server);
   try{
-    const data=await(await fetch(`${base}/native/stream/movie/tt0133093.json`)).json();
+    const data=await(await fetch(`${base}/bridge/native/stream/movie/tt0133093.json`)).json();
     const play=await fetch(data.streams[0].url,{redirect:'manual'});assert.equal(play.status,307);
     const media=await fetch(new URL(play.headers.get('location'),base));assert.match(media.headers.get('content-type'),/mpegurl/);
     const text=await media.text();assert.ok(!text.includes('cdn.test'));assert.ok(!text.includes('token=private'));

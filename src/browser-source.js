@@ -82,6 +82,7 @@ export class BrowserSource {
       page.on('request',r=>{if(mediaUrl(r.url()))capture(r.url(),r.headers());});
       page.on('response', response=> {
         const url=response.url();
+        if(response.status()>=400){const index=candidates.findIndex(c=>c.url===url);if(index>=0)candidates.splice(index,1);return;}
         const mime=String(response.headers()['content-type']||'');
         const hls=/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(mime);
         if(response.status()<400 && (mediaUrl(url)||hls) && !/trailer|preview|youtube/i.test(url) && !candidates.some(c=>c.url===url)) {

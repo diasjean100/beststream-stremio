@@ -63,9 +63,9 @@ test('both installed IDs return an immediate native bridge without browser links
   let calls=0;
   const addon=createAddon({getMetadata:async()=>{calls++;throw Error('must resolve on Play only');}});
   for(const native of [false,true]){
-    const result=await addon.streams('series','tt0903747:1:2','https://addon.test',native);
+    const result=await addon.streams('series','tt0903747:1:2','https://addon.test',native,true);
     assert.equal(result.streams.length,1);
-    assert.equal(result.streams[0].url,'https://addon.test/play/series/tt0903747%3A1%3A2');
+    assert.equal(result.streams[0].url,'https://addon.test/bridge/play/series/tt0903747%3A1%3A2');
     assert.equal(result.streams[0].externalUrl,undefined);
     assert.match(result.streams[0].title,/confirmar/);
     assert.equal(result.cacheMaxAge,0);
@@ -95,7 +95,7 @@ test('HTTP protocol, CORS, install page and error states',async()=>{
     const m=await fetch(`${base}/manifest.json`,{headers:{Host:'untrusted.test','X-Forwarded-Host':'evil.test'}});assert.equal(m.status,200);assert.equal(m.headers.get('access-control-allow-origin'),'*');
     assert.equal((await m.json()).id,'br.jean.beststream');
     assert.equal((await (await fetch(`${base}/native/manifest.json`)).json()).id,'br.jean.beststream.native');
-    const s=await (await fetch(`${base}/stream/movie/tt0063350.json`,{headers:{Host:'evil.test'}})).json();assert.ok(s.streams[0].url.startsWith(base+'/play/'));assert.equal(s.streams[0].externalUrl,undefined);
+    const s=await (await fetch(`${base}/stream/movie/tt0063350.json`,{headers:{Host:'evil.test'}})).json();assert.deepEqual(s.streams,[]);
     assert.deepEqual((await(await fetch(`${base}/stream/movie/garbage.json`)).json()).streams,[]);
     assert.equal((await fetch(`${base}/api/resolve?type=movie&id=wrong`)).status,400);
     assert.equal((await fetch(`${base}/anything.json`)).status,404);
@@ -140,21 +140,21 @@ test('source failures fall through in order without losing the requested title a
   const calls=[];
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async(p,v)=>{calls.push(p.id);assert.equal(v.id,'tt0133093');if(p.id==='fprime-at')throw Error('source offline');return p.id==='nexa-mov'?{status:'web-only',streams:[],pageUrl:'https://nexa.mov/watch/tmdb-movie/603'}:{status:'blocked',streams:[]};},close:async()=>{}}});
   const r=await addon.resolve('movie','tt0133093');
-  assert.deepEqual(calls,['fprime-at','nexa-mov','moviepal-live','bingebang-st']);
+  assert.deepEqual(calls,['fprime-at','moviepal-live','nexa-mov','bingebang-st']);
   assert.equal(r.pageUrl,'https://nexa.mov/watch/tmdb-movie/603');assert.deepEqual(r.streams,[]);
   assert.equal(r.attempts.length,4);
 });
 test('slow providers never block the Stremio stream list',async()=>{
   const addon=createAddon({getMetadata:()=>new Promise(()=>{}),getDirectory:()=>new Promise(()=>{})});
-  const result=await Promise.race([addon.streams('movie','tt0063350','https://addon.test'),new Promise((_,reject)=>setTimeout(()=>reject(Error('stream list stalled')),100))]);
-  assert.equal(result.streams[0].url,'https://addon.test/play/movie/tt0063350');
+  const result=await Promise.race([addon.streams('movie','tt0063350','https://addon.test',true,true),new Promise((_,reject)=>setTimeout(()=>reject(Error('stream list stalled')),100))]);
+  assert.equal(result.streams[0].url,'https://addon.test/bridge/play/movie/tt0063350');
 });
 test('an unavailable source is reported by Play resolution and never replaced with HTML',async()=>{
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Breaking Bad',tmdb:1396}),browser:{resolve:async()=>({status:'blocked',streams:[]}),close:async()=>{}}});
   const result=await addon.resolve('series','tt0903747:2:3');assert.deepEqual(result.streams,[]);
   for(const native of [false,true]){
     const r=await addon.streams('series','tt0903747:2:3','https://addon.test',native);
-    assert.equal(r.streams[0].externalUrl,undefined);assert.ok(r.streams[0].url.startsWith('https://addon.test/play/'));
+    assert.deepEqual(r.streams,[]);
   }
 });
 test('identical concurrent Play resolutions share the same provider work',async()=>{

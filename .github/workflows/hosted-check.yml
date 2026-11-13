@@ -1,6 +1,7 @@
 name: Verify hosted video from second host
 on:
   push:
+    branches: [main]
     paths:
       - scripts/hosted-smoke.js
   workflow_dispatch:

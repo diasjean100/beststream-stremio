@@ -27,10 +27,11 @@ export function createServer(addon=createAddon(),getDirectory=directory,{relay=n
     const url=new URL(req.url,'http://localhost');
     const rawPath=url.pathname;
     let path;try{path=decodeURIComponent(rawPath);}catch{return send(400,{error:'URL inválida'});}
+    const bridgeMode=path.startsWith('/bridge/');if(bridgeMode)path=path.slice(7);
     const nativeOnly=path.startsWith('/native/');if(nativeOnly)path=path.slice(7);
     try {
       if(path==='/healthz')return send(200,{ok:true,name:'BestStream',version:VERSION,commit:process.env.RENDER_GIT_COMMIT||null});
-      if(path==='/manifest.json')return send(200,addon.manifest(nativeOnly));
+      if(path==='/manifest.json')return send(200,addon.manifest(nativeOnly,bridgeMode));
       if(path==='/api/sources')return send(200,await getDirectory());
       // PUBLIC_BASE_URL or Render's trusted canonical URL prevents forwarded-host poisoning.
       const localPort=server.address()?.port;
@@ -54,14 +55,15 @@ export function createServer(addon=createAddon(),getDirectory=directory,{relay=n
             const result=await Promise.race([addon.resolve(video.type,video.id),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de busca esgotado')),playTimeoutMs);})]);
             const selected=result.streams?.find(s=>s.url);
             if(!selected)return send(503,{error:'Nenhuma fonte compatível respondeu para este título ou episódio. Tente novamente mais tarde.'});
-            const location=relay.register({url:selected.url,format:selected.behaviorHints?.filename?.endsWith('.m3u8')?'HLS':'MP4',headers:selected.behaviorHints?.proxyHeaders?.request||{}});
+            const location=bridgeMode?relay.register({url:selected.url,format:selected.behaviorHints?.filename?.endsWith('.m3u8')?'HLS':'MP4',headers:selected.behaviorHints?.proxyHeaders?.request||{}}):selected.url;
             res.writeHead(307,{Location:location,'Cache-Control':'no-store'});res.end();return;
           } finally {clearTimeout(timer);}
         }
-        return send(200,stream?await addon.streams(video.type,video.id,base,nativeOnly):await addon.resolve(video.type,video.id));
+        return send(200,stream?await addon.streams(video.type,video.id,base,nativeOnly,bridgeMode):await addon.resolve(video.type,video.id));
       }
       // Preserve percent encoding until URLSearchParams parses the extra fields, including literal '&'.
-      const catalog=/^\/catalog\/(movie|series)\/([\w-]+)(?:\/([^/]*))?\.json$/.exec(nativeOnly?rawPath.slice(7):rawPath);
+      const catalogPath=rawPath.slice((bridgeMode?7:0)+(nativeOnly?7:0));
+      const catalog=/^\/catalog\/(movie|series)\/([\w-]+)(?:\/([^/]*))?\.json$/.exec(catalogPath);
       if(catalog)return send(200,await addon.catalog(catalog[1],catalog[2],new URLSearchParams(catalog[3]||'')));
       if(/^\/watch\/(movie|series)\/tt\d{5,12}(?::\d{1,3}:\d{1,5})?$/.test(path)||allowedAssets.has(path)) {
         const name=allowedAssets.get(path)||'index.html';

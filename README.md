@@ -1,29 +1,43 @@
-# BestStream para Stremio
+# BestStream para Stremio — 0.4.0
 
-Add-on em português com busca de filmes e séries pelo IMDb, página de instalação e diretório de fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/).
+Integração com fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/), com conferência de título/episódio e reprodução de mídia dentro do Stremio. O diretório não hospeda os vídeos e cada site precisa de um adaptador próprio.
 
-**Estado: beta 0.3.1. O teste da produção validou vídeos HLS de The Matrix, Inception e dois episódios de Breaking Bad, incluindo trechos binários consultados a partir de um segundo servidor. A instalação recomenda o modo Direto. A disponibilidade varia por conexão; veja o relatório de testes. Não há cobertura confirmada de todos os sites, filmes ou episódios.**
+## Instalar ou atualizar
 
-## O que está implementado
+Abra https://beststream-stremio-jean.onrender.com/ e use **Adicionar ao Stremio**. Os endereços anteriores foram preservados:
 
-- Recursos `manifest`, `catalog` e `stream` no protocolo HTTP do Stremio, com CORS.
-- Identificadores IMDb compatíveis com títulos abertos a partir de outros catálogos: `tt…` para filmes e `tt…:temporada:episódio` para séries.
-- Dois modos: **Fontes**, com acesso ao navegador, e **Direto**, que só retorna mídia quando a verificação passa.
-- Busca de títulos pelo Cinemeta. A busca não comprova a disponibilidade de vídeo na fonte. O modo Fontes oferece também a página do título ou episódio no Nexa, identificada como navegação externa e sem afirmar disponibilidade.
-- Lista de referência de 55 entradas da página inicial, consultada em 06/11/2026, e tentativa de atualização do diretório a cada 12 horas. Sites listados não são 55 extratores implementados.
-- Adaptadores experimentais: BingeBang para busca por título e episódio; Nexa para filmes e episódios com o TMDB associado ao IMDb pelo Cinemeta. Vídeo HLS exige validação da playlist, de uma variante e de um trecho binário de vídeo. HTML, áudio isolado e segmentos recusados são descartados. URLs temporárias não são gravadas no código.
-- Os demais sites são links externos. Abertura do site, extração de vídeo, validação HTTP e reprodução no aparelho são etapas diferentes.
-- Cache limitado, contextos isolados e navegador reutilizado por até 45 segundos de inatividade, limite de requisições e bloqueio de destinos privados nas requisições do servidor.
+- `https://beststream-stremio-jean.onrender.com/native/manifest.json`
+- `https://beststream-stremio-jean.onrender.com/manifest.json`
 
-## Limitação central
+Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os dois manifestos recebem somente vídeo; os links de diretório ficam na página de configuração.
 
-O BestFreeStreaming **não hospeda vídeos**; é um diretório de serviços diferentes. Não existe uma API única de vídeos confirmada nessa página. Cada integração precisa de manutenção e testes próprios. O adaptador não resolve CAPTCHAs, não remove DRM e não contorna autenticação. Links podem expirar ou depender do IP e do navegador. Uma playlist respondendo no servidor não garante reprodução em outro IP ou aparelho.
+## Fluxo de reprodução
 
-O modo padrão aguarda até 22 segundos pelo vídeo antes de oferecer alternativas. O modo Direto aguarda a resolução da fonte e retorna somente mídia. O botão **“Abrir fontes” abre o navegador**. O modo Direto retorna uma lista vazia quando não confirma um vídeo. Não usamos páginas HTML, iframes ou vídeos de demonstração como se fossem o filme solicitado.
+**Direto, padrão:** ao abrir um título, o add-on procura uma fonte compatível e devolve o endereço de mídia com os cabeçalhos exigidos pela fonte. O Stremio recebe o vídeo do CDN, sem retransmissão completa pelo Render. O manifesto mantém o recurso `stream` para IMDb, incluindo `tt…:temporada:episódio`.
 
-## Executar
+**Ponte, opcional:** marque “Usar ponte pelo servidor” na instalação. O manifesto passa a ser `/bridge/native/manifest.json`. O cartão “BestStream • Automático” consulta a fonte quando se aperta Play; o vídeo, playlists, áudio, chaves HLS e segmentos passam pela ponte HTTP. O servidor preserva os cabeçalhos da fonte, reescreve URLs relativas e aceita requisições de intervalo para avanço no vídeo. URLs, cabeçalhos ou destinos arbitrários não são aceitos nos parâmetros da ponte.
 
-Requer Node.js 24.
+A opção de ponte informa antes da instalação que consome tráfego da hospedagem. **No Render, excedentes de tráfego podem ser cobrados mesmo em serviços Free quando existe meio de pagamento cadastrado.** Não foi contratado um plano pago. Consulte [as regras oficiais](https://render.com/docs/free) e a [franquia de tráfego](https://render.com/docs/outbound-bandwidth). O modo Direto é o padrão para evitar retransmitir filmes pelo servidor.
+
+## Adaptadores e limites
+
+| Fonte | Integração |
+| --- | --- |
+| MoviePal | Página de reprodução com TMDB confirmado pelo Cinemeta, episódio exato, player incorporado e mídia verificada; prioridade do navegador |
+| Fprime | Configuração pública do frontend e consulta HTTP para o TMDB/episódio exatos; disponibilidade experimental |
+| Nexa | Player do título/episódio exatos; fallback quando a fonte permite obter mídia |
+| BingeBang | Busca e identificação de título/episódio; pode exigir verificação manual |
+| Demais sites | Diretório de navegação; sem extrator nativo implementado |
+
+MoviePal substitui a dependência principal do Nexa, que deixou de entregar mídia nas consultas observadas em 12/11/2026. A lista de sites recebe atualização em segundo plano; a primeira consulta pode usar o snapshot de referência de 06/11.
+
+O sistema não contorna autenticação, CAPTCHA ou DRM. Não troca o filme por trailers, demonstrações ou páginas HTML. A conferência usa o mapeamento IMDb/TMDB, a rota da fonte e o episódio exibido; não é uma comparação visual integral da obra. Fontes externas, bloqueios, expiração de links, codecs e a conexão do aparelho continuam determinando a disponibilidade. Não há garantia de todo o catálogo nem de ausência de travamentos.
+
+O Render Free pode suspender por ociosidade e demorar para iniciar. Sessões da ponte são temporárias e se encerram em reinício/deploy; é necessário reabrir o vídeo nesse caso. Links de mídia assinados não são gravados no repositório.
+
+## Verificar e executar
+
+Requer Node.js 24. Chromium é necessário para os adaptadores de navegador.
 
 ```sh
 npm ci --omit=optional --ignore-scripts
@@ -33,54 +47,19 @@ npm run check
 npm start
 ```
 
-Abra `http://localhost:7000`. Para instalar, use a página ou cole um dos endereços no Stremio:
-
-- Fontes: `http://localhost:7000/manifest.json`
-- Somente direto: `http://localhost:7000/native/manifest.json`
-
-Instalação publicada: https://beststream-stremio-jean.onrender.com/ — o botão recomenda o manifesto https://beststream-stremio-jean.onrender.com/native/manifest.json.
-
-## Render
-
-[Preparar publicação no Render](https://dashboard.render.com/blueprint/new?repo=https://github.com/diasjean100/beststream-stremio)
-
-O `render.yaml` prepara um único serviço Docker no plano Free, sem banco e sem chave de API. O Dockerfile instala Chromium e executa os testes antes de iniciar. O serviço escuta em `0.0.0.0:$PORT`, oferece `/healthz` e usa `RENDER_EXTERNAL_URL` como endereço canônico. O Blueprint precisa estar no GitHub antes de ser aplicado.
-
-O plano gratuito tem recursos e franquias limitados, pode suspender o serviço por ociosidade e pode ser insuficiente para extração com navegador. O sistema não retransmite filmes pelo servidor nem configura serviços pagos. Consumo de rede e builds continuam sujeitos às regras da conta Render. Veja [limites oficiais](https://render.com/docs/free).
-
-## Verificações
+Os testes locais cobrem protocolo, IDs/episódios, fila de consultas, fallback, mídia, segurança de destinos, playlists e o caminho HTTP de reprodução. Quando FFmpeg está disponível, um teste gera mídia controlada e verifica a decodificação de áudio e vídeo através da ponte; esse material existe apenas no teste.
 
 ```sh
-npm test       # dezenove grupos de testes locais, sem depender das fontes externas
-npm run check  # sintaxe de todos os arquivos JavaScript
-npm run smoke  # teste real: dois filmes + dois episódios; falha se não houver vídeo direto
+node scripts/bridge-smoke.js # filmes/episódio reais: decodifica áudio e vídeo nos modos Direto e Ponte
+node scripts/hosted-smoke.js # verifica a versão publicada e os vídeos a partir de outro servidor
 ```
 
-O GitHub Actions executa os testes locais. O roteiro scripts/hosted-smoke.js verifica a produção a partir de outro servidor e espera pelo commit da publicação; o teste final da versão 0.3.1 passou nas quatro amostras. O extrator executado inteiramente no runner teve uma amostra sem mídia, conforme o relatório de validação. O smoke ao vivo pode ser disparado manualmente e quando o próprio roteiro de smoke muda; não executa consultas a cada alteração comum. Falha nesse teste significa que a integração não foi validada; os testes com fixtures não substituem esse resultado. Não são registrados links assinados, cookies nem tickets das fontes nos logs do smoke.
+As consultas reais podem falhar por mudanças ou bloqueios da fonte. Fixtures não substituem esses testes. Consulte [docs/VALIDATION.md](docs/VALIDATION.md) para o alcance e resultados observados.
 
-Consulte [o registro de validação](docs/VALIDATION.md) para saber exatamente o que foi observado.
+## Hospedagem e código
 
-## Rotas
+O `render.yaml` usa o serviço Docker existente no Free, sem banco. O Dockerfile executa os testes e instala Chromium. `/healthz` informa a versão e o commit publicado. A publicação deve apontar para o commit efetivamente testado.
 
-| Rota | Função |
-| --- | --- |
-| `/` ou `/configure` | Instalação, busca e fontes |
-| `/manifest.json` | Add-on com vídeos diretos e botão de navegador |
-| `/native/manifest.json` | Add-on apenas de vídeo direto |
-| `/stream/movie/tt0063350.json` | Fontes do filme |
-| `/stream/series/tt0903747:1:1.json` | Fontes de um episódio específico |
-| `/catalog/movie/beststream-movies/search=nome.json` | Busca de filmes |
-| `/catalog/series/beststream-series/search=nome.json` | Busca de séries |
-| `/api/sources` | Diretório e origem dos dados |
-| `/api/resolve?type=movie&id=tt0063350` | Diagnóstico da consulta, sem URL arbitrária |
-| `/healthz` | Saúde do serviço |
+Referências: [protocolo Stremio](https://stremio.github.io/stremio-addon-sdk/protocol.html), [formato de streams e cabeçalhos](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/stream.md), [Render Free](https://render.com/docs/free).
 
-## Fontes técnicas
-
-- [Protocolo oficial do Stremio](https://stremio.github.io/stremio-addon-sdk/protocol.html)
-- [Formato oficial de streams](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/stream.md)
-- [Formato oficial do manifesto](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/manifest.md)
-- [Playwright oficial](https://github.com/microsoft/playwright)
-- [Especificação do Render](https://render.com/docs/blueprint-spec)
-
-Projeto independente, sem afiliação com Stremio, BestFreeStreaming ou os sites listados.
+Projeto independente, sem afiliação com os serviços citados.

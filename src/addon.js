@@ -4,14 +4,14 @@ import { metadata, parseVideo, search } from './metadata.js';
 import { BrowserSource } from './browser-source.js';
 import { streamObject } from './media.js';
 import {VERSION} from './version.js';
-export function manifest(nativeOnly=false) {
-  return {id:`br.jean.beststream${nativeOnly?'.native':''}`,version:VERSION,name:nativeOnly?'BestStream • Direto':'BestStream',
-    description:'Ponte de reprodução: busca fontes compatíveis ao apertar Play e transmite para o Stremio. Disponibilidade depende das fontes.',
+export function manifest(nativeOnly=false,bridgeMode=false) {
+  return {id:`br.jean.beststream${nativeOnly?'.native':''}${bridgeMode?'.bridge':''}`,version:VERSION,name:bridgeMode?'BestStream • Ponte':nativeOnly?'BestStream • Direto':'BestStream',
+    description:bridgeMode?'Busca a fonte ao apertar Play e retransmite pelo servidor. Consome a franquia de tráfego da hospedagem.':'Busca fontes compatíveis para reprodução dentro do Stremio. O vídeo é recebido diretamente da fonte.',
     resources:[{name:'stream',types:['movie','series'],idPrefixes:['tt']},'catalog'],types:['movie','series'],
     catalogs:[{type:'movie',id:'beststream-movies',name:'BestStream • Buscar filmes',extra:[{name:'search',isRequired:true},{name:'skip'}]},
       {type:'series',id:'beststream-series',name:'BestStream • Buscar séries',extra:[{name:'search',isRequired:true},{name:'skip'}]}],behaviorHints:{configurable:true}};
 }
-export function createAddon({getDirectory=directory,getMetadata=metadata,browser=new BrowserSource(),getSearch=search}={}) {
+export function createAddon({getDirectory=directory,getMetadata=metadata,browser=new BrowserSource(),getSearch=search,streamWaitMs=25_000}={}) {
   const cache=new Cache(120);
   const getMeta=video=>cache.use(`meta:${video.type}:${video.imdb}`,6*60*60*1000,()=>getMetadata(video));
   return {
@@ -23,7 +23,7 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       const key=`${type}:${id}`;
       return cache.use(key,value=>value.streams.length?120_000:12_000,async()=>{
         const [meta,dir]=await Promise.all([getMeta(video),getDirectory()]);
-        const order=['fprime-at','nexa-mov','moviepal-live','bingebang-st'];
+        const order=['moviepal-live','nexa-mov','fprime-at','bingebang-st'];
         const providers=dir.sources.filter(p=>order.includes(p.id)&&(meta.tmdb||p.id==='bingebang-st')).sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
         const attempts=[];
         let winner=null;
@@ -48,13 +48,20 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
         return {...latest,video,meta,attempts,streams:[]};
       });
     },
-    async streams(type,id,base,nativeOnly=false) {
+    async streams(type,id,base,nativeOnly=false,bridgeMode=false) {
       const video=parseVideo(type,id);
       if(!video)return {streams:[],cacheMaxAge:10};
-      // The media URL belongs to this add-on. Source discovery starts on Play,
-      // outside Stremio's short stream-list timeout. Never return an HTML page.
+      if(!bridgeMode){
+        let timer;
+        try{
+          const result=await Promise.race([this.resolve(type,id).catch(()=>({streams:[]})),new Promise(resolve=>{timer=setTimeout(()=>resolve({streams:[]}),streamWaitMs);})]);
+          return{streams:result.streams,cacheMaxAge:result.streams.length?30:5};
+        }finally{clearTimeout(timer);}
+      }
+      // Retransmission is an explicit installation option, because video bytes
+      // consume the hosting account's bandwidth. Direct mode keeps CDN URLs.
       return {streams:[{name:'BestStream • Automático',title:'Buscar e reproduzir no Stremio\nDisponibilidade a confirmar ao apertar Play',
-        url:`${base}/play/${type}/${encodeURIComponent(id)}`,behaviorHints:{notWebReady:true,bingeGroup:'beststream-auto'}}],cacheMaxAge:0};
+        url:`${base}/bridge/play/${type}/${encodeURIComponent(id)}`,behaviorHints:{notWebReady:true,bingeGroup:'beststream-auto'}}],cacheMaxAge:0};
     },
     warm:()=>browser.warm?.(),
     close:()=>browser.close?.()

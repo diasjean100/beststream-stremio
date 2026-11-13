@@ -6,9 +6,10 @@ function node(tag,text,className){const n=document.createElement(tag);if(text!==
 let toastTimer;
 function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,3000);}
 async function copy(text){try{await navigator.clipboard.writeText(text);toast('Copiado!');}catch{toast(`Selecione e copie: ${text}`);}}
-function manifestUrl(){return `${location.origin}${$('input[name="mode"]:checked').value==='native'?'/native':''}/manifest.json`;}
+function manifestUrl(){return `${location.origin}${$('#bridge-mode').checked?'/bridge':''}${$('input[name="mode"]:checked').value==='native'?'/native':''}/manifest.json`;}
 function updateInstall(){const url=manifestUrl();$('#install').href=url.replace(/^https?:\/\//,'stremio://');}
 document.querySelectorAll('input[name="mode"]').forEach(r=>r.addEventListener('change',updateInstall));
+$('#bridge-mode').addEventListener('change',updateInstall);
 if(location.pathname.startsWith('/native/'))document.querySelector('input[value="native"]').checked=true;
 $('#copy').addEventListener('click',()=>copy(manifestUrl()));updateInstall();
 async function api(url){const response=await fetch(url);let data;try{data=await response.json();}catch{throw Error('O servidor ainda está iniciando. Tente novamente em instantes.');}if(!response.ok)throw Error(data.error||'Não foi possível consultar agora.');return data;}
