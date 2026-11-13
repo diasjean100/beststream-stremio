@@ -59,19 +59,25 @@ test('inline player identity decoding executes no remote JavaScript',()=>{
   assert.equal(sameIdentity(id,parseVideo('series','tt0903747:1:1')),false);
   assert.equal(sameIdentity(id,parseVideo('series','tt0903747:1:2')),true);
 });
-test('IMDb streams can be requested from other catalogs and native mode has no browser substitute',async()=>{
+test('both installed IDs return an immediate native bridge without browser links',async()=>{
   let calls=0;
-  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example',year:'2020'}),browser:{resolve:async()=>{calls++;return {streams:[],status:'not-found'};},close:async()=>{}}});
-  const standard=await addon.streams('movie','tt0063350','https://addon.test');
-  assert.equal(standard.streams.length,1);assert.ok(standard.streams[0].externalUrl);assert.equal(standard.streams[0].url,undefined);
-  const native=await addon.streams('movie','tt0063350','https://addon.test',true);
-  assert.deepEqual(native.streams,[]);assert.equal(calls,1);
-  assert.deepEqual(manifest().resources[0].idPrefixes,['tt']);assert.notEqual(manifest(true).id,manifest().id);
+  const addon=createAddon({getMetadata:async()=>{calls++;throw Error('must resolve on Play only');}});
+  for(const native of [false,true]){
+    const result=await addon.streams('series','tt0903747:1:2','https://addon.test',native);
+    assert.equal(result.streams.length,1);
+    assert.equal(result.streams[0].url,'https://addon.test/play/series/tt0903747%3A1%3A2');
+    assert.equal(result.streams[0].externalUrl,undefined);
+    assert.match(result.streams[0].title,/confirmar/);
+    assert.equal(result.cacheMaxAge,0);
+  }
+  assert.equal(calls,0);
+  assert.deepEqual(manifest().resources[0].idPrefixes,['tt']);
+  assert.equal(manifest().id,'br.jean.beststream');assert.equal(manifest(true).id,'br.jean.beststream.native');
 });
-test('native results contain real validated candidates, not directory homepages',async()=>{
+test('Play resolution retains only verified video candidates returned by a provider',async()=>{
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:async()=>({status:'resolved',streams:[{url:'https://cdn.test/video.m3u8',format:'HLS',headers:{}}]}),close:async()=>{}}});
-  const result=await addon.streams('series','tt0903747:1:1','https://addon.test',true);
-  assert.equal(result.streams.length,1);assert.equal(result.streams[0].url,'https://cdn.test/video.m3u8');assert.equal(result.streams[0].externalUrl,undefined);
+  const result=await addon.resolve('series','tt0903747:1:1');
+  assert.equal(result.streams[0].url,'https://cdn.test/video.m3u8');assert.equal(result.streams[0].externalUrl,undefined);
 });
 test('catalog preserves Unicode and encoded search titles',async()=>{
   let captured;
@@ -89,7 +95,7 @@ test('HTTP protocol, CORS, install page and error states',async()=>{
     const m=await fetch(`${base}/manifest.json`,{headers:{Host:'untrusted.test','X-Forwarded-Host':'evil.test'}});assert.equal(m.status,200);assert.equal(m.headers.get('access-control-allow-origin'),'*');
     assert.equal((await m.json()).id,'br.jean.beststream');
     assert.equal((await (await fetch(`${base}/native/manifest.json`)).json()).id,'br.jean.beststream.native');
-    const s=await (await fetch(`${base}/stream/movie/tt0063350.json`,{headers:{Host:'evil.test'}})).json();assert.ok(s.streams[0].externalUrl.startsWith(base));
+    const s=await (await fetch(`${base}/stream/movie/tt0063350.json`,{headers:{Host:'evil.test'}})).json();assert.ok(s.streams[0].url.startsWith(base+'/play/'));assert.equal(s.streams[0].externalUrl,undefined);
     assert.deepEqual((await(await fetch(`${base}/stream/movie/garbage.json`)).json()).streams,[]);
     assert.equal((await fetch(`${base}/api/resolve?type=movie&id=wrong`)).status,400);
     assert.equal((await fetch(`${base}/anything.json`)).status,404);
@@ -130,41 +136,35 @@ test('second provider requires the requested episode in its visible player',()=>
   assert.equal(nexaEpisodeConfirmed('Breaking Bad S01 E01',ep),false);
   assert.equal(nexaEpisodeConfirmed('Breaking Bad',ep),false);
 });
-test('provider fallback uses exact mapped source and preserves confirmed webpage links',async()=>{
+test('source failures fall through in order without losing the requested title and episode',async()=>{
   const calls=[];
-  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async(p)=>{calls.push(p.name);return p.id==='nexa-mov'?{status:'web-only',streams:[],pageUrl:'https://nexa.mov/watch/tmdb-movie/603'}:{status:'blocked',streams:[]};},close:async()=>{}}});
-  await addon.resolve('movie','tt0133093');
-  const r=await addon.streams('movie','tt0133093','https://addon.test');
-  assert.deepEqual(calls,['Nexa','BingeBang']);assert.equal(r.streams[0].externalUrl,'https://nexa.mov/watch/tmdb-movie/603');assert.equal(r.streams[0].url,undefined);
+  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async(p,v)=>{calls.push(p.id);assert.equal(v.id,'tt0133093');if(p.id==='fprime-at')throw Error('source offline');return p.id==='nexa-mov'?{status:'web-only',streams:[],pageUrl:'https://nexa.mov/watch/tmdb-movie/603'}:{status:'blocked',streams:[]};},close:async()=>{}}});
+  const r=await addon.resolve('movie','tt0133093');
+  assert.deepEqual(calls,['fprime-at','nexa-mov','moviepal-live','bingebang-st']);
+  assert.equal(r.pageUrl,'https://nexa.mov/watch/tmdb-movie/603');assert.deepEqual(r.streams,[]);
+  assert.equal(r.attempts.length,4);
 });
-test('browser-source card remains available while direct resolution is still pending',async()=>{
-  let finish;
-  const pending=new Promise(resolve=>{finish=resolve;});
-  const addon=createAddon({streamWaitMs:1,getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:()=>pending,close:async()=>{}}});
-  const r=await addon.streams('movie','tt0063350','https://addon.test');
-  assert.equal(r.streams[0].externalUrl,'https://addon.test/watch/movie/tt0063350');
-  finish({status:'not-found',streams:[]});
-  await addon.resolve('movie','tt0063350');
+test('slow providers never block the Stremio stream list',async()=>{
+  const addon=createAddon({getMetadata:()=>new Promise(()=>{}),getDirectory:()=>new Promise(()=>{})});
+  const result=await Promise.race([addon.streams('movie','tt0063350','https://addon.test'),new Promise((_,reject)=>setTimeout(()=>reject(Error('stream list stalled')),100))]);
+  assert.equal(result.streams[0].url,'https://addon.test/play/movie/tt0063350');
 });
-test('mapped browser sources use movie and episode URLs without claiming direct playback',async()=>{
+test('an unavailable source is reported by Play resolution and never replaced with HTML',async()=>{
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Breaking Bad',tmdb:1396}),browser:{resolve:async()=>({status:'blocked',streams:[]}),close:async()=>{}}});
-  const r=await addon.streams('series','tt0903747:2:3','https://addon.test');
-  assert.equal(r.streams[0].externalUrl,'https://nexa.mov/watch/tmdb-tv/1396/s2-e3');
-  assert.match(r.streams[0].title,/não confirmada/);assert.equal(r.streams[0].url,undefined);
-  const native=await addon.streams('series','tt0903747:2:3','https://addon.test',true);
-  assert.deepEqual(native.streams,[]);
+  const result=await addon.resolve('series','tt0903747:2:3');assert.deepEqual(result.streams,[]);
+  for(const native of [false,true]){
+    const r=await addon.streams('series','tt0903747:2:3','https://addon.test',native);
+    assert.equal(r.streams[0].externalUrl,undefined);assert.ok(r.streams[0].url.startsWith('https://addon.test/play/'));
+  }
 });
-
-test('the first ordinary Stremio request includes native video when resolution finishes',async()=>{
+test('identical concurrent Play resolutions share the same provider work',async()=>{
+  let count=0;
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:async()=>{
-    await new Promise(resolve=>setTimeout(resolve,10));
-    return {status:'resolved',streams:[{url:'https://cdn.test/movie.m3u8',format:'HLS',headers:{}}]};
+    count++;await new Promise(resolve=>setTimeout(resolve,10));return{status:'resolved',streams:[{url:'https://cdn.test/movie.m3u8',format:'HLS',headers:{}}]};
   },close:async()=>{}}});
-  const first=await addon.streams('movie','tt0133093','https://addon.test');
-  assert.equal(first.streams[0].url,'https://cdn.test/movie.m3u8');
-  assert.equal(first.streams[0].externalUrl,undefined);
+  const [first,second]=await Promise.all([addon.resolve('movie','tt0133093'),addon.resolve('movie','tt0133093')]);
+  assert.equal(count,1);assert.equal(first.streams[0].url,second.streams[0].url);
 });
-
 
 test('HLS requires a real video segment, including disguised image paths',async()=>{
   const ts=Buffer.alloc(1024);ts[0]=ts[188]=ts[376]=0x47;

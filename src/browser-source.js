@@ -1,5 +1,6 @@
 import { publicTarget } from './network.js';
 import { mediaUrl, playerIdentity, validateMedia } from './media.js';
+import {FprimeSource} from './fprime-source.js';
 
 const TIMEOUT=50_000;
 export const normalize=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -19,7 +20,7 @@ export function nexaEpisodeConfirmed(text,video) {
 }
 
 export class BrowserSource {
-  constructor() { this.running=false; this.instance=null; this.launching=null; this.idleTimer=null; this.lastUsed=0; this.checked=new Map(); }
+  constructor() { this.running=false; this.instance=null; this.launching=null; this.idleTimer=null; this.lastUsed=0; this.checked=new Map();this.queue=Promise.resolve();this.waiting=0;this.fprime=new FprimeSource(); }
   async browser() {
     clearTimeout(this.idleTimer);
     if(this.instance?.isConnected()) return this.instance;
@@ -34,9 +35,17 @@ export class BrowserSource {
   async warm() { await this.browser();if(!this.running)this.releaseIdle(); }
   async close() { clearTimeout(this.idleTimer);await this.launching?.catch(()=>{});const b=this.instance;this.instance=null;await b?.close(); }
   async resolve(provider,video,meta) {
-    if(!['bingebang-st','nexa-mov'].includes(provider.id)) return {status:'unsupported',streams:[],message:'Fonte disponível somente como link de navegador.'};
+    if(provider.id==='fprime-at')return this.fprime.resolve(video,meta);
+    if(this.waiting>=4)return {status:'busy',streams:[],message:'Aguarde a consulta em andamento e tente novamente.'};
+    this.waiting++;
+    const task=this.queue.then(()=>this.resolveInBrowser(provider,video,meta));
+    this.queue=task.catch(()=>{});
+    try{return await task;}finally{this.waiting--;}
+  }
+  async resolveInBrowser(provider,video,meta) {
+    if(!['bingebang-st','nexa-mov','moviepal-live'].includes(provider.id)) return {status:'unsupported',streams:[],message:'Fonte sem adaptador de reprodução.'};
     if(provider.id==='nexa-mov'&&!nexaPlaybackUrl(video,meta))return {status:'unsupported',streams:[],message:'O identificador desta fonte não foi confirmado para este vídeo.'};
-    if(this.running) return {status:'busy',streams:[],message:'A fonte está consultando outro título. Tente novamente em alguns segundos.'};
+    if(provider.id==='moviepal-live'&&(!Number.isSafeInteger(meta.tmdb)||meta.tmdb<1))return{status:'unsupported',streams:[]};
     this.running=true;
     let context;
     const candidates=[];
@@ -67,6 +76,10 @@ export class BrowserSource {
       page.setDefaultNavigationTimeout(10_000);
       timer=setTimeout(()=>context?.close().catch(()=>{}),TIMEOUT);
       page.on('popup',p=>p.close().catch(()=>{}));
+      const capture=(url,headers={},format)=>{
+        if((mediaUrl(url)||format==='HLS')&&!/trailer|preview|youtube|introdb/i.test(url)&&!candidates.some(c=>c.url===url))candidates.push({url,...(format?{format}:{}),headers:{...(headers.referer?{Referer:headers.referer}:{}),...(headers.origin?{Origin:headers.origin}:{}),...(headers['user-agent']?{'User-Agent':headers['user-agent']}:{} )}});
+      };
+      page.on('request',r=>{if(mediaUrl(r.url()))capture(r.url(),r.headers());});
       page.on('response', response=> {
         const url=response.url();
         const mime=String(response.headers()['content-type']||'');
@@ -76,6 +89,26 @@ export class BrowserSource {
           candidates.push({url,...(hls?{format:'HLS'}:{}),headers:{...(requestHeaders.referer?{Referer:requestHeaders.referer}:{}),...(requestHeaders.origin?{Origin:requestHeaders.origin}:{}),...(requestHeaders['user-agent']?{'User-Agent':requestHeaders['user-agent']}:{})}});
         }
       });
+      if(provider.id==='moviepal-live') {
+        stage='moviepal-player';
+        const playerUrl=`https://moviepal.live/${video.type==='series'?'tv':'movie'}/watch/${meta.tmdb}${video.type==='series'?`?season=${video.season}&episode=${video.episode}`:''}`;
+        await page.goto(playerUrl,{waitUntil:'domcontentloaded',timeout:10000});
+        if(await challenge(page))return{status:'blocked',streams:[]};
+        await page.waitForFunction(name=>document.body.innerText.toLowerCase().includes(name.toLowerCase()),meta.name,{timeout:10000});
+        const current=new URL(page.url()),expected=new URL(playerUrl);
+        if(current.pathname!==expected.pathname||current.search!==expected.search)return{status:'not-found',streams:[]};
+        if(video.type==='series'&&!nexaEpisodeConfirmed(await page.locator('body').innerText(),video))return{status:'not-found',streams:[]};
+        stage='moviepal-play';
+        for(let pass=0;pass<3&&!candidates.length;pass++) {
+          for(const frame of page.frames()) {
+            const play=frame.getByRole('button',{name:/^(play|play video|watch now|resume)$/i}).first();
+            if(await play.isVisible().catch(()=>false))await play.click({timeout:1500,noWaitAfter:true}).catch(()=>{});
+          }
+          await page.waitForResponse(r=>mediaUrl(r.url()),{timeout:4500}).catch(()=>{});
+        }
+        const verified=await verifyCandidates(candidates,page);
+        return{status:verified.length?'resolved':'unavailable',streams:verified,pageUrl:playerUrl};
+      }
       if(provider.id==='nexa-mov') {
         stage='nexa-navigation';
         const playerUrl=nexaPlaybackUrl(video,meta);
@@ -107,7 +140,7 @@ export class BrowserSource {
           // waiting for a page event. Confirm the result instead of discarding it.
           if(error.name!=='TimeoutError')throw error;
           const playing=await page.getByRole('button',{name:'Pause',exact:true}).isVisible().catch(()=>false);
-          if(!playing&&!candidates.length)throw error;
+          if(!playing&&!candidates.length)await page.keyboard.press('Space').catch(()=>{});
         });
         stage='nexa-sources';
         if(!candidates.length)await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:18000}).catch(()=>{});

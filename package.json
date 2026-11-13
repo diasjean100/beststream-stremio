@@ -1,6 +1,6 @@
 {
   "name": "beststream-stremio",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Stremio bridge for public BestFreeStreaming sources. Availability is checked, never assumed.",
   "type": "module",

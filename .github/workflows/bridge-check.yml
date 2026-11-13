@@ -1,0 +1,24 @@
+name: Verify native bridge audio and video
+on:
+  push:
+    branches: [fix/native-bridge]
+    paths:
+      - src/**
+      - scripts/bridge-smoke.js
+      - .github/workflows/bridge-check.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --omit=optional --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - run: ffmpeg -version
+      - run: node scripts/bridge-smoke.js
