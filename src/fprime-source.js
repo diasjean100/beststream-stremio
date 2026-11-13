@@ -22,16 +22,20 @@ export class FprimeSource {
     if(!Number.isSafeInteger(meta.tmdb)||meta.tmdb<1)return{status:'unsupported',streams:[]};
     const params=new URLSearchParams({tmdbId:String(meta.tmdb),type:video.type==='series'?'tv':'movie'});
     if(video.type==='series'){params.set('seasonId',String(video.season));params.set('episodeId',String(video.episode));}
+    let stage='public-config';
     try{
       const {endpoint,key}=await this.config();
+      stage='source-request';
       const r=await this.get(`${endpoint}?${params}`,{maxBytes:1_000_000,timeout:9000});
       if(r.status!==200)return{status:r.status===403?'blocked':'unavailable',streams:[]};
       const raw=JSON.parse(r.body.toString()).sources?.Astra?.url;
       if(typeof raw!=='string')return{status:'not-found',streams:[]};
+      stage='url-data';
       const url=await unwrapPublicUrl(raw,key);
+      stage='media-validation';
       const candidate=await validateMedia({url,format:'HLS',headers:{Referer:'https://fprime.at/',Origin:'https://fprime.at'}},this.get);
       return{status:candidate?'resolved':'unavailable',streams:candidate?[candidate]:[],message:candidate?'Vídeo verificado na fonte Fprime.':'A fonte não confirmou mídia compatível.'};
-    }catch{return{status:'unavailable',streams:[],message:'A fonte Fprime não concluiu a consulta.'};}
+    }catch(error){console.warn(JSON.stringify({event:'provider_failure',provider:'fprime-at',stage,error:error.name}));return{status:'unavailable',streams:[],diagnosticStage:stage,message:'A fonte Fprime não concluiu a consulta.'};}
   }
 }
 export function parseFprimeConfig(code){
@@ -42,7 +46,7 @@ export function parseFprimeConfig(code){
   return{endpoint:endpoint[1],key};
 }
 export async function unwrapPublicUrl(raw,key){
-  if(!raw.startsWith('as_'))return new URL(raw).href;
+  if(!raw.startsWith('as_')){const u=new URL(raw);if(!['http:','https:'].includes(u.protocol)||u.username||u.password)throw Error('URL inválida');return u.href;}
   const value=raw.slice(3);if(!/^[a-f0-9]+$/i.test(value)||value.length%2||value.length<56||value.length>16000)throw Error('URL inválida');
   const bytes=Buffer.from(value,'hex');
   const cryptoKey=await webcrypto.subtle.importKey('raw',Buffer.from(key,'hex'),{name:'AES-GCM'},false,['decrypt']);

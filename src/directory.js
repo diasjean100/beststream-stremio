@@ -38,12 +38,14 @@ export function parseDirectory(html) {
 
 const cache=new Cache(2);
 export async function directory() {
-  return cache.use('directory',12*60*60*1000,async()=> {
+  const hit=cache.get('directory');if(hit)return hit;
+  cache.use('directory',12*60*60*1000,async()=> {
     try {
       const r=await request(DIRECTORY_URL);
       const sources=r.status===200?parseDirectory(r.body.toString()):[];
       if(sources.length>=10) return {sources,origin:'live',checkedAt:new Date().toISOString()};
     } catch { /* An outage must not erase the last reviewed source list. */ }
     return {sources:BOOTSTRAP,origin:'snapshot',checkedAt:'2026-11-06',notice:'Lista de referência; atualização ao vivo indisponível.'};
-  });
+  }).catch(()=>{});
+  return {sources:BOOTSTRAP,origin:'snapshot',checkedAt:'2026-11-06',notice:'Atualização em andamento; usando a lista de referência.'};
 }

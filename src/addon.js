@@ -26,14 +26,25 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
         const order=['fprime-at','nexa-mov','moviepal-live','bingebang-st'];
         const providers=dir.sources.filter(p=>order.includes(p.id)&&(meta.tmdb||p.id==='bingebang-st')).sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
         const attempts=[];
+        let winner=null;
         let latest={streams:[],status:'unavailable',message:'Fonte de reprodução ausente do diretório.'};
-        for(const provider of providers){
-          let resolved;
-          try{resolved=await browser.resolve(provider,video,meta);}catch{resolved={status:'unavailable',streams:[]};}
-          attempts.push({provider:provider.name,status:resolved.status,...(resolved.diagnosticStage?{stage:resolved.diagnosticStage}:{})});
-          if(!latest.pageUrl||resolved.pageUrl)latest={...resolved,provider:provider.name};
-          if(resolved.streams.length)return {...resolved,provider:provider.name,video,meta,attempts,streams:resolved.streams.map(s=>streamObject(s,provider))};
-        }
+        // One HTTP source and one browser source may progress together. Browser
+        // jobs themselves are serialized to keep memory use bounded.
+        const groups=[providers.filter(p=>p.id==='fprime-at'),providers.filter(p=>p.id!=='fprime-at')].filter(g=>g.length);
+        const tasks=groups.map(async group=>{
+          for(const provider of group){
+            if(winner)break;
+            let resolved;
+            try{resolved=await browser.resolve(provider,video,meta);}catch{resolved={status:'unavailable',streams:[]};}
+            attempts.push({provider:provider.name,status:resolved.status,...(resolved.diagnosticStage?{stage:resolved.diagnosticStage}:{})});
+            if(!latest.pageUrl||resolved.pageUrl)latest={...resolved,provider:provider.name};
+            if(resolved.streams.length){
+              winner={...resolved,provider:provider.name,video,meta,attempts:[...attempts],streams:resolved.streams.map(s=>streamObject(s,provider))};return winner;
+            }
+          }
+          throw Error('Nenhuma mídia compatível nesta fonte');
+        });
+        try{return await Promise.any(tasks);}catch{/* Preserve diagnostics when every adapter failed. */}
         return {...latest,video,meta,attempts,streams:[]};
       });
     },

@@ -37,7 +37,7 @@ export async function validateMedia(candidate, get=request) {
     const target=new URL(candidate.url);
     if(!['http:','https:'].includes(target.protocol)||target.username||target.password)return null;
     const hls=candidate.format==='HLS'||/\.m3u8(?:$|[?#])/i.test(candidate.url);
-    const r=await get(candidate.url,{headers:{...candidate.headers,...(!hls?{Range:'bytes=0-32767'}:{})},maxBytes:hls?1_000_000:65536,timeout:6500});
+    const r=await get(candidate.url,{headers:{...candidate.headers,...(!hls?{Range:'bytes=0-32767'}:{})},maxBytes:hls?1_000_000:65536,...(!hls?{prefixBytes:32768}:{}),timeout:6500});
     if(![200,206].includes(r.status)) return null;
     const contentType=String(r.headers['content-type']||'');
     const binaryVideo=(r.body.subarray(4,8).toString()==='ftyp'||r.body.subarray(0,4).toString('hex')==='1a45dfa3')&&/^video\//i.test(contentType);
