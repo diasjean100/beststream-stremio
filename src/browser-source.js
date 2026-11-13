@@ -270,7 +270,7 @@ export async function moviepalServers(page,candidates,reset,{verify=verifyCandid
   // These are the actual server controls in MoviePal's public player. Keep the
   // already-confirmed title/season/episode page while changing only its source.
   let selected='Alpha';
-  for(const server of ['Alpha','Charlie','Beta','Delta','Echo']) {
+  for(const server of ['Charlie','Delta','Echo','Alpha','Beta']) {
     if(server!==selected) {
       const button=page.getByRole('button',{name:server,exact:true}).first();
       if(!await button.isVisible().catch(()=>false))continue;
@@ -294,7 +294,8 @@ export async function moviepalServers(page,candidates,reset,{verify=verifyCandid
       if(verified.length||blocked||checked.size>=6)break;
       await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:500}).catch(()=>{});
     }while(Date.now()<until);
-    console.info(JSON.stringify({event:'moviepal_server',server,candidates:candidates.length,verified:verified.length}));
+    const hosts=page.frames().map(frame=>{try{return{host:new URL(frame.url()).hostname,parent:frame.parentFrame()?new URL(frame.parentFrame().url()).hostname:null};}catch{return null;}}).filter(f=>f?.host);
+    console.info(JSON.stringify({event:'moviepal_server',server,candidates:candidates.length,verified:verified.length,frames:hosts}));
     if(verified.length)return verified;
   }
   return [];

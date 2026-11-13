@@ -1,3 +1,13 @@
+# Ajuste 0.5.3 — variante de inspeção e atribuição dos players
+
+A 0.5.2 entrou em produção, mas seu teste do primeiro acesso ainda não confirmou os três títulos. A espera do player continua necessária; ele não produziu candidatos no primeiro intervalo de Alpha na hospedagem.
+
+O domínio Referer de uma mídia não basta para identificar qual botão do MoviePal a originou: servidores diferentes podem incorporar o mesmo player. A atribuição anterior de todos os retornos Cinesrc ao botão Alpha era uma inferência, não uma comprovação. O log agora registra a hierarquia de domínios dos frames ativos, sem URLs de vídeo, parâmetros ou tokens.
+
+A 0.5.3 combina a espera contínua do controle Play com prioridade aos fallbacks Charlie/Delta observados na hospedagem. A inspeção também escolhe a menor variante de vídeo disponível na playlist, para reduzir o trabalho de decodificação no host gratuito. O endereço original do master continua sendo o entregue ao Stremio, com todas as opções de qualidade e áudio. O filtro de aviso permanece obrigatório.
+
+---
+
 # Ajuste 0.5.2 — aguardar o player real
 
 A validação publicada da 0.5.1 também encontrou listas vazias no primeiro acesso: https://github.com/diasjean100/beststream-stremio/actions/runs/43425572114 . Consultas posteriores receberam mídia, incluindo Teen Wolf com quadros verificados em outra conexão. Os filmes não foram validados nessa conexão local.

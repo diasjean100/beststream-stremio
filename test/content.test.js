@@ -35,6 +35,19 @@ test('a real decoded control frame is accepted, corrupt MPEG-TS signatures fail 
   assert.equal(videoPrefix(fake),true);assert.equal((await inspectContent(fake)).ok,false);
 });
 
+test('frame inspection uses a small video variant and retains the master URL for playback',async()=>{
+  const good=spawnSync('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-f','lavfi','-i','testsrc2=size=320x180:rate=10',
+    '-t','1','-c:v','libx264','-threads','1','-preset','ultrafast','-f','mpegts','pipe:1'],{maxBuffer:1_000_000});
+  assert.equal(good.status,0);
+  const master='#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=15000000,RESOLUTION=3840x2160\nhigh/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=300000,RESOLUTION=320x180\nlow/index.m3u8';
+  const calls=[];
+  const result=await validateMedia({url:'https://cdn.test/master.m3u8'},async url=>{
+    calls.push(url);return response(url,url.endsWith('master.m3u8')?master:url.endsWith('index.m3u8')?playlist:good.stdout);
+  });
+  assert.equal(result.url,'https://cdn.test/master.m3u8');assert.ok(calls.some(url=>url.includes('/low/')));
+  assert.ok(calls.every(url=>!url.includes('/high/')));assert.equal(result.inspection,'frame-and-ocr');
+});
+
 test('AES-128 transport encryption cannot hide an Atlantic warning from the frame check',async()=>{
   const key=Buffer.alloc(16,7),iv=Buffer.alloc(16);iv.writeBigUInt64BE(9n,8);
   const cipher=createCipheriv('aes-128-cbc',key,iv),encrypted=Buffer.concat([cipher.update(warning),cipher.final()]);
@@ -65,17 +78,17 @@ test('all installed add-on aliases suppress a decodable blocked video returned b
 });
 
 test('MoviePal switches server after a rejected video without leaving the selected title page',async()=>{
-  const candidates=[{url:'https://cdn.test/warning.m3u8'}],clicked=[],verified=[];
-  const page={frames:()=>[],getByRole:(_role,{name})=>({first:()=>({isVisible:async()=>true,click:async()=>{clicked.push(name);candidates.push({url:'https://cdn.test/control.m3u8'});}})})};
+  const candidates=[{url:'https://cdn.test/old.m3u8'}],clicked=[],verified=[];
+  const page={frames:()=>[],getByRole:(_role,{name})=>({first:()=>({isVisible:async()=>true,click:async()=>{clicked.push(name);candidates.push({url:`https://cdn.test/${name==='Charlie'?'warning':'control'}.m3u8`});}})})};
   const result=await moviepalServers(page,candidates,()=>{candidates.length=0;},{verify:async(list,_page,{onBlocked})=>{verified.push(list.map(c=>c.url));if(list.some(c=>c.url.includes('/warning.')))onBlocked();return list.filter(c=>c.url.includes('/control.'));}});
-  assert.deepEqual(clicked,['Charlie']);assert.equal(result[0].url,'https://cdn.test/control.m3u8');
+  assert.deepEqual(clicked,['Charlie','Delta']);assert.equal(result[0].url,'https://cdn.test/control.m3u8');
   assert.deepEqual(verified,[['https://cdn.test/warning.m3u8'],['https://cdn.test/control.m3u8']]);
 });
 
 test('a delayed Play control and an early audio probe do not make MoviePal abandon the video',async()=>{
   const candidates=[{url:'https://cdn.test/audio-probe.mp4'}];let polls=0;
-  const frame={getByRole:()=>({first:()=>({isVisible:async()=>polls>=3,click:async()=>candidates.push({url:'https://cdn.test/video.m3u8'})})})};
-  const page={frames:()=>[frame],waitForResponse:async()=>{polls++;await new Promise(r=>setTimeout(r,5));},getByRole:()=>{throw Error('The selected source was abandoned too early');}};
-  const result=await moviepalServers(page,candidates,()=>{throw Error('The selected title must stay open');},{serverBudgetMs:1000,verify:async list=>list.filter(c=>c.url.endsWith('/video.m3u8'))});
+  const frame={url:()=> 'https://player.test/',parentFrame:()=>null,getByRole:()=>({first:()=>({isVisible:async()=>polls>=3,click:async()=>candidates.push({url:'https://cdn.test/video.m3u8'})})})};
+  const page={frames:()=>[frame],waitForResponse:async()=>{polls++;await new Promise(r=>setTimeout(r,5));},getByRole:(_role,{name})=>{assert.equal(name,'Charlie');return{first:()=>({isVisible:async()=>true,click:async()=>{}})};}};
+  const result=await moviepalServers(page,candidates,()=>{candidates.length=0;candidates.push({url:'https://cdn.test/audio-probe.mp4'});},{serverBudgetMs:1000,verify:async list=>list.filter(c=>c.url.endsWith('/video.m3u8'))});
   assert.equal(result[0].url,'https://cdn.test/video.m3u8');assert.ok(polls>=3);
 });

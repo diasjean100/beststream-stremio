@@ -18,9 +18,12 @@ export function videoPrefix(body) {
 async function playableHls(text,url,headers,get,depth=0) {
   if(!validHls(text)||depth>2)return null;
   const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-  const variant=lines.findIndex(s=>s.startsWith('#EXT-X-STREAM-INF:'));
-  if(variant>=0) {
-    const path=lines[variant+1];if(!path||path.startsWith('#'))return null;
+  const variants=[];
+  for(let i=0;i<lines.length-1;i++)if(lines[i].startsWith('#EXT-X-STREAM-INF:')&&!lines[i+1].startsWith('#'))variants.push({path:lines[i+1],width:Number(lines[i].match(/RESOLUTION=(\d+)x/)?.[1]||0)});
+  if(variants.length) {
+    // Inspect a lower-resolution video variant; keep the original master URL
+    // for playback so Stremio still has the full quality/audio selection.
+    const path=(variants.filter(v=>v.width).sort((a,b)=>a.width-b.width)[0]||variants[0]).path;
     const r=await get(new URL(path,url).href,{headers,maxBytes:1_000_000,timeout:6500});
     return r.status===200?playableHls(r.body.toString(),r.url,headers,get,depth+1):null;
   }
