@@ -24,25 +24,30 @@ async function playableHls(text,url,headers,get,depth=0) {
     const r=await get(new URL(path,url).href,{headers,maxBytes:1_000_000,timeout:6500});
     return r.status===200?playableHls(r.body.toString(),r.url,headers,get,depth+1):null;
   }
-  const segment=lines.find(s=>!s.startsWith('#'));if(!segment||/#EXT-X-BYTERANGE:/.test(text))return null;
+  const segmentIndex=lines.findIndex(s=>!s.startsWith('#'));
+  const segment=lines[segmentIndex];if(!segment||/#EXT-X-BYTERANGE:/.test(text))return null;
+  const tags=lines.slice(0,segmentIndex);
   const r=await get(new URL(segment,url).href,{headers,maxBytes:PROBE_BYTES,prefixBytes:PROBE_BYTES,timeout:6500});
   if(![200,206].includes(r.status)||r.body.length<564)return null;
   if(/<\s*(?:!doctype|html)|^\s*\{/.test(r.body.subarray(0,100).toString()))return null;
   let bytes=r.body;
-  const key=/#EXT-X-KEY:[^\n]*METHOD=AES-128[^\n]*URI="([^"]+)"/.exec(text);
-  if(key) {
-    const k=await get(new URL(key[1],url).href,{headers,maxBytes:64,timeout:6500});
+  const keyTag=tags.findLast(s=>s.startsWith('#EXT-X-KEY:'));
+  if(keyTag&&!/\bMETHOD=NONE(?:,|$)/.test(keyTag)) {
+    const keyUri=keyTag.match(/\bURI="([^"]+)"/)?.[1];
+    if(!/\bMETHOD=AES-128(?:,|$)/.test(keyTag)||!keyUri)return null;
+    const k=await get(new URL(keyUri,url).href,{headers,maxBytes:64,timeout:6500});
     if(k.status!==200||k.body.length!==16)return null;
-    const explicit=key[0].match(/\bIV=0x([a-f0-9]{1,32})/i)?.[1];
+    const explicit=keyTag.match(/\bIV=0x([a-f0-9]{1,32})(?:,|$)/i)?.[1];
     const iv=explicit?Buffer.from(explicit.padStart(32,'0'),'hex'):Buffer.alloc(16);
     if(!explicit)iv.writeBigUInt64BE(BigInt(text.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/)?.[1]||0),8);
     const decipher=createDecipheriv('aes-128-cbc',k.body,iv);decipher.setAutoPadding(false);
     bytes=decipher.update(bytes.subarray(0,Math.floor(bytes.length/16)*16));
   }
-  const map=/#EXT-X-MAP:[^\n]*URI="([^"]+)"/.exec(text);
-  if(map) {
-    if(/BYTERANGE=/.test(map[0]))return null;
-    const init=await get(new URL(map[1],url).href,{headers,maxBytes:256*1024,timeout:6500});
+  const mapTag=tags.findLast(s=>s.startsWith('#EXT-X-MAP:'));
+  if(mapTag) {
+    const mapUri=mapTag.match(/\bURI="([^"]+)"/)?.[1];
+    if(!mapUri||/BYTERANGE=/.test(mapTag))return null;
+    const init=await get(new URL(mapUri,url).href,{headers,maxBytes:256*1024,timeout:6500});
     if(init.status!==200||!videoPrefix(init.body))return null;
     bytes=Buffer.concat([init.body,bytes]);
   }

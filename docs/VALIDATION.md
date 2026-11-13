@@ -1,3 +1,33 @@
+# Auditoria 0.5.0 — aviso codificado no vídeo
+
+Registro de 13/11/2026. Esta auditoria corrige a interpretação dos testes históricos abaixo: decodificar faixas de áudio e vídeo não comprova que os quadros contêm o filme solicitado.
+
+## Causa reproduzida
+
+A produção 0.4.1 retornou Fprime como vencedor para Matrix (`tt0133093`), Inception (`tt1375666`) e Teen Wolf S1E1 (`tt1567432:1:1`). Foram lidas as playlists e baixados apenas pequenos segmentos de amostra. FFmpeg decodificou os quadros, e a inspeção visual reproduziu exatamente o aviso Atlantic enviado pelo usuário. O texto também foi identificado por Tesseract. Matrix apresentou o aviso no início, aos 60 segundos e aos 300 segundos; os outros dois títulos no início.
+
+Os caminhos de instalação e os streams já não usavam páginas HTML nem `externalUrl`. O problema persistente estava no conteúdo de vídeos tecnicamente válidos. A hipótese anterior de um link externo da interface não explicava essa reprodução.
+
+## Correção e teste de regressão
+
+A validação precisa decodificar um quadro do prefixo limitado do primeiro segmento e verificar seu texto. O aviso reproduzido é rejeitado; falhas de decodificação/OCR também não viram streams. AES-128 de transporte, quando suportado, passa pela mesma conferência. DRM continua recusado. A inspeção é serializada e os subprocessos têm prazo, limite de saída e um thread.
+
+O arquivo `test/fixtures/atlantic-warning.ts` é um trecho de aproximadamente 73 KiB do aviso reproduzido; não contém URLs assinadas, chaves ou dados de conta. Ele demonstra o falso positivo anterior: tem assinatura MPEG-TS e quadros decodificáveis, mas não é uma opção de reprodução válida. O teste exige sua rejeição em todos os quatro manifestos antigos e nas rotas Play. Um controle de vídeo gerado no teste é aceito.
+
+A troca de servidores de MoviePal preserva o título e episódio e descarta candidatos da tentativa anterior. Sua verificação controlada testa a passagem de Alpha recusado para Beta utilizável. Disponibilidade em fontes reais é conferida separadamente; testes controlados não são prova de catálogo externo disponível.
+
+33 testes locais passaram, sem skips; a checagem de sintaxe passou. Testes externos e publicação desta versão são registrados após a conclusão das respectivas execuções.
+
+## Limites
+
+O filtro reconhece o aviso no quadro inicial. Não assiste à obra completa nem garante ausência de bloqueios em quadros futuros, em outra rede ou em outro aparelho. Não comprova a língua de áudio/legendas nem identifica visualmente cada obra. O caminho de reprodução continua somente de links: o servidor lê amostras limitadas e o Stremio recebe mídia diretamente da fonte. Nenhum recurso pago foi configurado.
+
+---
+
+## Histórico com interpretação limitada
+
+Os registros abaixo comprovam somente os testes técnicos descritos. A inferência anterior de que eram prova suficiente de conteúdo correto foi invalidada pelo aviso que também decodifica como vídeo.
+
 # Correção 0.4.1 — ponte apenas de links
 
 Registro iniciado em 13/11/2026 (Brasília). A imagem enviada pelo usuário exibe um aviso do domínio Atlantic sobre VPN/proxy. Isso não prova que o aparelho utiliza VPN nem que o Render tenha causado o aviso. O diretório publicado tinha Atlantic com `adapter: null`, mas a interface oferecia “Abrir site”. Esse caminho manual foi removido.

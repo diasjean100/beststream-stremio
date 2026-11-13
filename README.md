@@ -1,4 +1,4 @@
-# BestStream para Stremio — 0.4.1
+# BestStream para Stremio — 0.5.0
 
 Integração com fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/), com conferência de título/episódio e reprodução de mídia dentro do Stremio. O diretório não hospeda os vídeos e cada site precisa de um adaptador próprio.
 
@@ -9,7 +9,7 @@ Abra https://beststream-stremio-jean.onrender.com/ e use **Adicionar ao Stremio*
 - `https://beststream-stremio-jean.onrender.com/native/manifest.json`
 - `https://beststream-stremio-jean.onrender.com/manifest.json`
 
-Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os dois manifestos recebem somente vídeo; os links de diretório ficam na página de configuração.
+Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os quatro manifestos antigos recebem a mesma validação de vídeo. A fonte exibida no Stremio inclui a versão 0.5.0 para facilitar a conferência.
 
 ## Fluxo de reprodução
 
@@ -23,9 +23,11 @@ A hospedagem continua necessária para executar a busca e fazer verificações l
 
 ## Correção do aviso Atlantic
 
-A página anterior incluía cartões “Abrir site”, inclusive para Atlantic, que era uma referência sem adaptador. Isso permitia sair do fluxo do Stremio e encontrar avisos/bloqueios do próprio site. Esses cartões e o botão “Abrir título na fonte” foram removidos. A interface agora lista somente as integrações e abre os títulos no Stremio.
+Em 13/11/2026 a auditoria reproduziu a imagem do usuário ao decodificar um stream real da produção. A fonte Fprime devolvia uma playlist e segmentos válidos de vídeo, mas os quadros mostravam apenas o aviso do Atlantic. O mesmo aviso apareceu no início de três títulos e aos 60 e 300 segundos de Matrix. As verificações anteriores de HTTP, HLS e decodificação não distinguiam esse aviso do conteúdo solicitado.
 
-Avisos de verificação, VPN/proxy, páginas HTML e fontes indisponíveis não são aceitos como vídeo. O aviso do Atlantic não comprova a existência de VPN no aparelho; essa restrição da fonte não é contornada.
+A validação agora lê no máximo 1 MiB do primeiro segmento, decodifica um quadro com FFmpeg e extrai texto com Tesseract. Avisos identificados como Atlantic, Cloudflare Warp ou classroom.best são rejeitados. Falhas no decodificador ou OCR também impedem a oferta do candidato. Isso verifica o quadro inicial, não identifica integralmente o filme nem garante que um bloqueio não apareça depois ou em outra conexão.
+
+MoviePal tenta os controles reais Alpha, Beta, Charlie, Delta e Echo antes de desistir, preservando a página do título/episódio confirmado. Um aviso rejeitado não é apresentado como uma opção para assistir. A página de instalação também deixou de incluir o link de saída para o diretório e exibe o endereço para instalação manual.
 
 ## Adaptadores e limites
 
@@ -46,9 +48,10 @@ O Render Free pode suspender por ociosidade e demorar para iniciar. URLs assinad
 
 ## Verificar e executar
 
-Requer Node.js 24. Chromium é necessário para os adaptadores de navegador.
+Requer Node.js 24, FFmpeg e Tesseract com o idioma inglês. Chromium é necessário para os adaptadores de navegador. O Dockerfile instala todas essas dependências.
 
 ```sh
+sudo apt-get update && sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-eng
 npm ci --omit=optional --ignore-scripts
 npx playwright install --with-deps chromium
 npm test
@@ -56,7 +59,7 @@ npm run check
 npm start
 ```
 
-Os testes locais cobrem protocolo, IDs/episódios, fila de consultas, fallback, mídia, segurança de destinos, playlists e o caminho HTTP de reprodução. Quando FFmpeg está disponível, um teste gera mídia controlada e comprova que áudio e vídeo são decodificados diretamente do servidor da fonte, enquanto o add-on recebe apenas a consulta de metadados. Esse material existe apenas no teste.
+Os testes locais cobrem protocolo, IDs/episódios, fila de consultas, fallback, mídia, segurança de destinos, playlists e o caminho HTTP de reprodução. O teste de regressão contém um trecho real do vídeo de aviso, sem URLs nem tokens, e exige sua rejeição em todos os endereços de instalação. Outro teste gera mídia controlada e comprova que áudio e vídeo são decodificados diretamente do servidor da fonte, enquanto o add-on recebe apenas a consulta de metadados. Esse material existe apenas no teste.
 
 ```sh
 node scripts/bridge-smoke.js # filmes/episódio reais: decodifica áudio e vídeo direto da fonte e verifica os IDs antigos

@@ -41,6 +41,8 @@ test('AES-128 transport encryption cannot hide an Atlantic warning from the fram
   const encryptedPlaylist=playlist.replace('#EXTINF:', '#EXT-X-MEDIA-SEQUENCE:9\n#EXT-X-KEY:METHOD=AES-128,URI="key.bin"\n#EXTINF:');
   const result=await validateMedia({url:'https://cdn.test/encrypted.m3u8'},async url=>response(url,url.includes('.m3u8')?encryptedPlaylist:url.includes('key.bin')?key:encrypted));
   assert.equal(result,null);
+  const explicitPlaylist=encryptedPlaylist.replace('METHOD=AES-128,URI="key.bin"',`URI="key.bin",IV=0x${iv.toString('hex')},METHOD=AES-128`).replace('MEDIA-SEQUENCE:9','MEDIA-SEQUENCE:1');
+  assert.equal(await validateMedia({url:'https://cdn.test/explicit-iv.m3u8'},async url=>response(url,url.includes('.m3u8')?explicitPlaylist:url.includes('key.bin')?key:encrypted)),null);
 });
 
 test('all installed add-on aliases suppress a decodable blocked video returned by Fprime',async()=>{

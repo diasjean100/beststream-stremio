@@ -5,7 +5,7 @@ const safeUrl=value=>{try{const u=new URL(value);return ['http:','https:'].inclu
 function node(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
 let toastTimer;
 function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,3000);}
-async function copy(text){try{await navigator.clipboard.writeText(text);toast('Copiado!');}catch{const field=$('#manifest-address');field.focus();field.select();toast('Mantenha o endereço selecionado e toque em Copiar.');}}
+async function copy(text){try{await navigator.clipboard.writeText(text);toast('Copiado!');}catch{if(text===manifestUrl()){const field=$('#manifest-address');field.focus();field.select();toast('Mantenha o endereço selecionado e toque em Copiar.');}else toast('Selecione o título exibido para copiá-lo.');}}
 function manifestUrl(){return `${location.origin}/native/manifest.json`;}
 function updateInstall(){$('#install').href=manifestUrl().replace(/^https?:\/\//,'stremio://');$('#manifest-address').value=manifestUrl();}
 $('#copy').addEventListener('click',()=>copy(manifestUrl()));updateInstall();
