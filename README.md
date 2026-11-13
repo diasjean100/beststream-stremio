@@ -1,4 +1,4 @@
-# BestStream para Stremio — 0.5.4
+# BestStream para Stremio — 0.5.5
 
 Integração com fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/), com conferência de título/episódio e reprodução de mídia dentro do Stremio. O diretório não hospeda os vídeos e cada site precisa de um adaptador próprio.
 
@@ -9,7 +9,7 @@ Abra https://beststream-stremio-jean.onrender.com/ e use **Adicionar ao Stremio*
 - `https://beststream-stremio-jean.onrender.com/native/manifest.json`
 - `https://beststream-stremio-jean.onrender.com/manifest.json`
 
-Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os quatro manifestos antigos recebem a mesma validação de vídeo. A fonte exibida no Stremio inclui a versão 0.5.4 para facilitar a conferência.
+Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os quatro manifestos antigos recebem a mesma validação de vídeo. A fonte exibida no Stremio inclui a versão 0.5.5 para facilitar a conferência.
 
 ## Fluxo de reprodução
 
@@ -35,7 +35,7 @@ MoviePal tenta os controles reais Charlie, Alpha, Delta, Beta e Echo antes de de
 | --- | --- |
 | MoviePal | Página de reprodução com TMDB confirmado pelo Cinemeta, episódio exato, player incorporado e mídia verificada; prioridade do navegador |
 | Reelix | Busca por título com TMDB/tipo/ano exatos e validação da identidade da página e do episódio; integração experimental |
-| Fprime | Configuração pública do frontend e consulta HTTP para o TMDB/episódio exatos; disponibilidade experimental |
+| Fprime | Desativada da busca automática: devolveu o aviso Atlantic nos testes da hospedagem. Adaptador preservado para testes de regressão |
 | Nexa | Player do título/episódio exatos; fallback quando a fonte permite obter mídia |
 | BingeBang | Busca e identificação de título/episódio; pode exigir verificação manual |
 | Demais sites | Diretório de navegação; sem extrator nativo implementado |

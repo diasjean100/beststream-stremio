@@ -65,7 +65,7 @@ test('all installed add-on aliases suppress a decodable blocked video returned b
     url.endsWith('Watch-test.js')?code:url.includes('/astra?')?JSON.stringify({sources:{Astra:{url:'https://cdn.test/title.m3u8'}}}):url.includes('.m3u8')?playlist:warning)});
   const browser=new BrowserSource();browser.fprime=source;
   const dir=async()=>({sources:[{id:'fprime-at',name:'Fprime'}]});
-  const addon=createAddon({getDirectory:dir,getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser});
+  const addon=createAddon({getDirectory:dir,getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser,providerOrder:['fprime-at']});
   const server=createServer(addon,dir);await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const base=`http://127.0.0.1:${server.address().port}`;
   try {

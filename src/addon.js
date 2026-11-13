@@ -11,7 +11,7 @@ export function manifest(nativeOnly=false,bridgeMode=false) {
     catalogs:[{type:'movie',id:'beststream-movies',name:'BestStream • Buscar filmes',extra:[{name:'search',isRequired:true},{name:'skip'}]},
       {type:'series',id:'beststream-series',name:'BestStream • Buscar séries',extra:[{name:'search',isRequired:true},{name:'skip'}]}],behaviorHints:{configurable:true}};
 }
-export function createAddon({getDirectory=directory,getMetadata=metadata,browser=new BrowserSource(),getSearch=search,streamWaitMs=55_000}={}) {
+export function createAddon({getDirectory=directory,getMetadata=metadata,browser=new BrowserSource(),getSearch=search,streamWaitMs=55_000,providerOrder=['moviepal-live','reelix-ac','nexa-mov','bingebang-st']}={}) {
   const cache=new Cache(120);
   const getMeta=video=>cache.use(`meta:${video.type}:${video.imdb}`,6*60*60*1000,()=>getMetadata(video));
   return {
@@ -21,9 +21,12 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
       const video=parseVideo(type,id);
       if(!video)return {video:null,streams:[],status:'invalid',message:'Use o IMDb do filme ou IMDb:temporada:episódio da série.'};
       const key=`${type}:${id}`;
-      return cache.use(key,value=>value.attempts?.some(a=>a.status==='busy')?0:value.streams.length?90_000:12_000,async()=>{
+      return cache.use(key,value=>value.attempts?.some(a=>['busy','timeout'].includes(a.status))?0:value.streams.length?90_000:12_000,async()=>{
+        const deadline=Date.now()+Math.max(1,streamWaitMs-1000);
         const [meta,dir]=await Promise.all([getMeta(video),getDirectory()]);
-        const order=['moviepal-live','reelix-ac','nexa-mov','fprime-at','bingebang-st'];
+        // Fprime is quarantined: production returned the encoded Atlantic
+        // notice for every audited sample. Its adapter remains testable offline.
+        const order=providerOrder;
         const providers=dir.sources.filter(p=>order.includes(p.id)&&(meta.tmdb||p.id==='bingebang-st')).sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
         const attempts=[];
         let winner=null;
@@ -33,9 +36,9 @@ export function createAddon({getDirectory=directory,getMetadata=metadata,browser
         const groups=[providers.filter(p=>p.id==='fprime-at'),providers.filter(p=>p.id!=='fprime-at')].filter(g=>g.length);
         const tasks=groups.map(async group=>{
           for(const provider of group){
-            if(winner)break;
+            if(winner||Date.now()>=deadline)break;
             let resolved;
-            try{resolved=await browser.resolve(provider,video,meta);}catch{resolved={status:'unavailable',streams:[]};}
+            try{resolved=await browser.resolve(provider,video,meta,{deadline});}catch{resolved={status:'unavailable',streams:[]};}
             attempts.push({provider:provider.name,status:resolved.status,...(resolved.diagnosticStage?{stage:resolved.diagnosticStage}:{})});
             if(!latest.pageUrl||resolved.pageUrl)latest={...resolved,provider:provider.name};
             if(resolved.streams.length){

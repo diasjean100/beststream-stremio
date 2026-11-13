@@ -1,3 +1,13 @@
+# Ajuste 0.5.5 — quarentena e orçamento da fila
+
+A 0.5.4 foi a primeira correção desta auditoria a passar a conferência dos dois filmes no Render a partir do segundo host: a execução publicada recebeu um stream e validou seu quadro inicial para Matrix e Inception. Teen Wolf ainda voltou vazio. A conexão local também capturou Inception aos 60 e 300 segundos, mas não validou Matrix; isso reforça o limite de testes entre redes diferentes.
+
+Fprime foi removida da busca automática e da lista de integrações da página: nas consultas observadas do Render ela devolveu o aviso Atlantic ou esgotou a inspeção. Além de filtrar o conteúdo, a produção passa a evitar essa fonte comprovadamente problemática. Seu adaptador e o teste de regressão continuam disponíveis por injeção explícita nos testes.
+
+Séries tentam Alpha primeiro, com até trinta segundos de acompanhamento do player. Filmes mantêm a ordem de fallback validada separadamente. O prazo total acompanha os trabalhos da fila: uma tarefa vencida não abre novo navegador e uma resolução não inicia outro provedor depois do orçamento. Isso evita que pesquisas já encerradas pelo cliente ocupem a fila de títulos seguintes.
+
+---
+
 # Ajuste 0.5.4 — confirmar a seleção e isolar a inspeção
 
 O log da 0.5.3 registrou Charlie com um iframe Cinesrc ainda ativo, enquanto a interface pública define MoviesAPI para esse botão. O clique de 1,5 segundo era ignorado em caso de erro e o código marcava o servidor como selecionado sem confirmar seu estado. Agora o clique tem até cinco segundos, pode ser repetido e precisa deixar o botão no estado selecionado antes de prosseguir. O teste novo exige essa repetição quando o primeiro clique não registra a troca.

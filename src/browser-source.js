@@ -35,15 +35,16 @@ export class BrowserSource {
   releaseIdle() { clearTimeout(this.idleTimer);this.idleTimer=setTimeout(()=>{if(!this.running)this.close().catch(()=>{});},45_000);this.idleTimer.unref(); }
   async warm() { await this.browser();if(!this.running)this.releaseIdle(); }
   async close() { clearTimeout(this.idleTimer);await this.launching?.catch(()=>{});const b=this.instance;this.instance=null;await b?.close(); }
-  async resolve(provider,video,meta) {
+  async resolve(provider,video,meta,{deadline}={}) {
+    if(deadline&&deadline<=Date.now())return{status:'timeout',streams:[]};
     if(provider.id==='fprime-at')return this.fprime.resolve(video,meta);
     if(this.waiting>=4)return {status:'busy',streams:[],message:'Aguarde a consulta em andamento e tente novamente.'};
     this.waiting++;
-    const task=this.queue.then(()=>this.resolveInBrowser(provider,video,meta));
+    const task=this.queue.then(()=>deadline&&deadline<=Date.now()?{status:'timeout',streams:[]}:this.resolveInBrowser(provider,video,meta,{deadline}));
     this.queue=task.catch(()=>{});
     try{return await task;}finally{this.waiting--;}
   }
-  async resolveInBrowser(provider,video,meta) {
+  async resolveInBrowser(provider,video,meta,{deadline}={}) {
     if(!['bingebang-st','nexa-mov','moviepal-live','reelix-ac'].includes(provider.id)) return {status:'unsupported',streams:[],message:'Fonte sem adaptador de reprodução.'};
     if(provider.id==='nexa-mov'&&!nexaPlaybackUrl(video,meta))return {status:'unsupported',streams:[],message:'O identificador desta fonte não foi confirmado para este vídeo.'};
     if(provider.id==='moviepal-live'&&(!Number.isSafeInteger(meta.tmdb)||meta.tmdb<1))return{status:'unsupported',streams:[]};
@@ -78,7 +79,7 @@ export class BrowserSource {
       page=await context.newPage();
       page.setDefaultTimeout(5000);
       page.setDefaultNavigationTimeout(10_000);
-      timer=setTimeout(()=>context?.close().catch(()=>{}),TIMEOUT);
+      timer=setTimeout(()=>context?.close().catch(()=>{}),Math.max(1,Math.min(TIMEOUT,(deadline||Infinity)-Date.now())));
       page.on('popup',p=>p.close().catch(()=>{}));
       const capture=(url,headers={},format)=>{
         if((mediaUrl(url)||format==='HLS')&&!/trailer|preview|youtube|introdb/i.test(url)&&!candidates.some(c=>c.url===url))candidates.push({url,...(format?{format}:{}),headers:{...(headers.referer?{Referer:headers.referer}:{}),...(headers.origin?{Origin:headers.origin}:{}),...(headers['user-agent']?{'User-Agent':headers['user-agent']}:{} )}});
@@ -126,7 +127,9 @@ export class BrowserSource {
         if(current.pathname!==expected.pathname||current.search!==expected.search)return{status:'not-found',streams:[]};
         if(video.type==='series'&&!nexaEpisodeConfirmed(await page.locator('body').innerText(),video))return{status:'not-found',streams:[]};
         stage='moviepal-play';
-        const verified=await moviepalServers(page,candidates,()=>{generation++;candidates.length=0;});
+        const verified=await moviepalServers(page,candidates,()=>{generation++;candidates.length=0;},{
+          ...(video.type==='series'?{servers:['Alpha','Charlie','Delta','Beta','Echo'],serverBudgetMs:30000}:{})
+        });
         return{status:verified.length?'resolved':'unavailable',streams:verified,pageUrl:playerUrl};
       }
       if(provider.id==='nexa-mov') {
@@ -236,7 +239,7 @@ export class BrowserSource {
         console.warn(JSON.stringify({event:'provider_public_ui',stage,state}));
         if(state&&hasChallenge(state.title,state.headings.join(' ')))return {status:'blocked',streams:[],message:'O site exige verificação manual.'};
       }
-      return {status:'unavailable',streams:[],diagnosticStage:stage,message:/browser.*executable|executable.*exist/i.test(error.message)?'Navegador do servidor indisponível.':'A fonte não concluiu a consulta dentro do prazo.'};
+      return {status:deadline&&Date.now()>=deadline?'timeout':'unavailable',streams:[],diagnosticStage:stage,message:/browser.*executable|executable.*exist/i.test(error.message)?'Navegador do servidor indisponível.':'A fonte não concluiu a consulta dentro do prazo.'};
     } finally {
       clearTimeout(timer);await context?.close().catch(()=>{});this.lastUsed=Date.now();
       this.running=false;
@@ -275,11 +278,11 @@ async function verifyCandidates(candidates,page,{onBlocked,validationPage=page}=
   }
   return [];
 }
-export async function moviepalServers(page,candidates,reset,{verify=verifyCandidates,serverBudgetMs=18_000}={}) {
+export async function moviepalServers(page,candidates,reset,{verify=verifyCandidates,serverBudgetMs=18_000,servers=['Charlie','Alpha','Delta','Beta','Echo']}={}) {
   // These are the actual server controls in MoviePal's public player. Keep the
   // already-confirmed title/season/episode page while changing only its source.
   let selected='Alpha';
-  for(const server of ['Charlie','Alpha','Delta','Beta','Echo']) {
+  for(const server of servers) {
     if(server!==selected) {
       const button=page.getByRole('button',{name:server,exact:true}).first();
       if(!await button.isVisible().catch(()=>false))continue;

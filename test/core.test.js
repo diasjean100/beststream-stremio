@@ -139,9 +139,27 @@ test('source failures fall through in order without losing the requested title a
   const calls=[];
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async(p,v)=>{calls.push(p.id);assert.equal(v.id,'tt0133093');if(p.id==='fprime-at')throw Error('source offline');return p.id==='nexa-mov'?{status:'web-only',streams:[],pageUrl:'https://nexa.mov/watch/tmdb-movie/603'}:{status:'blocked',streams:[]};},close:async()=>{}}});
   const r=await addon.resolve('movie','tt0133093');
-  assert.deepEqual(calls,['fprime-at','moviepal-live','reelix-ac','nexa-mov','bingebang-st']);
+  assert.deepEqual(calls,['moviepal-live','reelix-ac','nexa-mov','bingebang-st']);
   assert.equal(r.pageUrl,'https://nexa.mov/watch/tmdb-movie/603');assert.deepEqual(r.streams,[]);
-  assert.equal(r.attempts.length,5);
+  assert.equal(r.attempts.length,4);
+});
+
+test('the quarantined Fprime source cannot win an automatic stream request',async()=>{
+  const calls=[];
+  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async p=>{
+    calls.push(p.id);assert.notEqual(p.id,'fprime-at');return{status:'resolved',streams:[{url:'https://cdn.test/film.m3u8',format:'HLS',headers:{}}]};
+  },close:async()=>{}}});
+  const result=await addon.resolve('movie','tt0133093');assert.equal(result.streams.length,1);assert.deepEqual(calls,['moviepal-live']);
+  assert.equal(BOOTSTRAP.find(p=>p.id==='fprime-at').adapter,null);
+});
+
+test('a timed-out lookup can be retried immediately when the source becomes available',async()=>{
+  let calls=0;
+  const addon=createAddon({getDirectory:async()=>({sources:[{id:'moviepal-live',name:'Fixture'}]}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async()=>{
+    calls++;return calls===1?{status:'timeout',streams:[]}:{status:'resolved',streams:[{url:'https://cdn.test/film.m3u8',format:'HLS',headers:{}}]};
+  },close:async()=>{}}});
+  assert.equal((await addon.resolve('movie','tt0133093')).streams.length,0);
+  assert.equal((await addon.resolve('movie','tt0133093')).streams.length,1);assert.equal(calls,2);
 });
 test('slow providers never block the Stremio stream list',async()=>{
   const addon=createAddon({streamWaitMs:5,getMetadata:()=>new Promise(()=>{}),getDirectory:()=>new Promise(()=>{})});

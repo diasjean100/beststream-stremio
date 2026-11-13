@@ -6,7 +6,7 @@ import {createServer} from '../src/server.js';
 import {BrowserSource} from '../src/browser-source.js';
 import {FprimeSource,parseFprimeConfig,unwrapPublicUrl} from '../src/fprime-source.js';
 
-const fixtureDirectory=async()=>({sources:[{id:'fprime-at',name:'Fprime'}]});
+const fixtureDirectory=async()=>({sources:[{id:'moviepal-live',name:'Fixture'}]});
 const listen=async server=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));return `http://127.0.0.1:${server.address().port}`;};
 const close=server=>new Promise(r=>server.close(r));
 const ts=Buffer.alloc(1024);ts[0]=ts[188]=ts[376]=0x47;
@@ -42,6 +42,16 @@ test('different browser queries are queued instead of cached as empty busy resul
   browser.resolveInBrowser=async(_provider,video)=>{active++;peak=Math.max(peak,active);visited.push(video.id);await new Promise(r=>setTimeout(r,5));active--;return{status:'not-found',streams:[]};};
   const values=await Promise.all(['tt0133093','tt1375666'].map(id=>browser.resolve({id:'nexa-mov'},{id},{})));
   assert.equal(peak,1);assert.deepEqual(visited,['tt0133093','tt1375666']);assert.ok(values.every(x=>x.status==='not-found'));
+});
+
+test('a queued query that has expired never starts another browser job',async()=>{
+  const browser=new BrowserSource(),visited=[];let release;
+  const hold=new Promise(resolve=>{release=resolve;});
+  browser.resolveInBrowser=async(_provider,video)=>{visited.push(video.id);if(video.id==='first')await hold;return{status:'not-found',streams:[]};};
+  const first=browser.resolve({id:'moviepal-live'},{id:'first'},{});await Promise.resolve();
+  const stale=browser.resolve({id:'moviepal-live'},{id:'stale'},{},{deadline:Date.now()+5});
+  await new Promise(resolve=>setTimeout(resolve,15));release();await first;
+  assert.equal((await stale).status,'timeout');assert.deepEqual(visited,['first']);
 });
 
 test('Fprime discovers its current public endpoint and validates the requested exact episode without executing scripts',async()=>{
