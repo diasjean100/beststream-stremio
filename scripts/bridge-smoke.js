@@ -5,8 +5,8 @@ import {createAddon} from '../src/addon.js';
 import {createServer} from '../src/server.js';
 import {BrowserSource} from '../src/browser-source.js';
 import {metadata,parseVideo} from '../src/metadata.js';
-import {mkdir} from 'node:fs/promises';
-import {blockedSlate} from '../src/content-inspector.js';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {auditFrame} from './audit-segments.js';
 const addon=createAddon(),server=createServer(addon);
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
@@ -23,22 +23,11 @@ function decode(url,headers={},frameName){return new Promise(resolve=>{
   child.once('exit',code=>{clearTimeout(timer);resolve({ok:code===0,stage:code===0?'audio-video-decoded':stage});});
 });}
 async function inspectLater(url,headers,id,seconds) {
-  const path=`audit-frames/${id.replaceAll(':','-')}-${seconds}s.png`;
-  const extra=Object.keys(headers).length?['-headers',Object.entries(headers).map(([key,value])=>`${key}: ${value}\r\n`).join('')]:[];
-  const captured=await new Promise(resolve=>{
-    const child=spawn('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-rw_timeout','25000000',...extra,'-ss',String(seconds),'-i',url,
-      '-map','0:v:0','-frames:v','1','-vf','scale=960:-2','-threads','1',path],{stdio:'ignore'});
-    const timer=setTimeout(()=>child.kill('SIGKILL'),35000);
-    child.once('error',()=>{clearTimeout(timer);resolve(false);});child.once('close',code=>{clearTimeout(timer);resolve(code===0);});
-  });
-  if(!captured)return {ok:false,seconds,stage:'later-frame-unavailable'};
-  return new Promise(resolve=>{
-    const child=spawn('tesseract',[path,'stdout','-l','eng','--psm','11'],{stdio:['ignore','pipe','ignore'],env:{...process.env,OMP_THREAD_LIMIT:'1'}});
-    let text='';child.stdout.on('data',chunk=>{if(text.length<16000)text+=chunk.toString();});
-    const timer=setTimeout(()=>child.kill('SIGKILL'),6000);
-    child.once('error',()=>{clearTimeout(timer);resolve({ok:false,seconds,stage:'ocr-unavailable'});});
-    child.once('close',code=>{clearTimeout(timer);const blocked=blockedSlate(text);resolve({ok:code===0&&!blocked,seconds,stage:blocked?'blocked-slate':code===0?'frame-inspected':'ocr-failed'});});
-  });
+  try {
+    const frame=await auditFrame({url,headers},seconds);
+    await writeFile(`audit-frames/${id.replaceAll(':','-')}-${seconds}s.png`,frame.png);
+    return {ok:frame.ok,seconds,stage:frame.ok?'frame-inspected':'blocked-slate'};
+  } catch(error){return {ok:false,seconds,stage:error.message};}
 }
 try{
   for(const[type,id]of [['movie','tt0133093'],['movie','tt1375666'],['series','tt1567432:1:1']]){
