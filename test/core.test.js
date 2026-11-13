@@ -59,20 +59,17 @@ test('inline player identity decoding executes no remote JavaScript',()=>{
   assert.equal(sameIdentity(id,parseVideo('series','tt0903747:1:1')),false);
   assert.equal(sameIdentity(id,parseVideo('series','tt0903747:1:2')),true);
 });
-test('both installed IDs return an immediate native bridge without browser links',async()=>{
+test('every previous installation mode receives direct source URLs with playback headers',async()=>{
   let calls=0;
-  const addon=createAddon({getMetadata:async()=>{calls++;throw Error('must resolve on Play only');}});
-  for(const native of [false,true]){
-    const result=await addon.streams('series','tt0903747:1:2','https://addon.test',native,true);
-    assert.equal(result.streams.length,1);
-    assert.equal(result.streams[0].url,'https://addon.test/bridge/play/series/tt0903747%3A1%3A2');
-    assert.equal(result.streams[0].externalUrl,undefined);
-    assert.match(result.streams[0].title,/confirmar/);
-    assert.equal(result.cacheMaxAge,0);
+  const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>{calls++;return{name:'Fixture',tmdb:42};},browser:{resolve:async()=>({status:'resolved',streams:[{url:'https://cdn.test/video.m3u8',format:'HLS',headers:{Referer:'https://source.test/'}}]}),close:async()=>{}}});
+  for(const native of [false,true])for(const bridge of [false,true]){
+    const result=await addon.streams('series','tt0903747:1:2','https://addon.test',native,bridge);
+    assert.equal(result.streams.length,1);assert.equal(result.streams[0].url,'https://cdn.test/video.m3u8');
+    assert.equal(result.streams[0].externalUrl,undefined);assert.equal(result.streams[0].behaviorHints.proxyHeaders.request.Referer,'https://source.test/');
+    assert.equal(result.cacheMaxAge,30);
   }
-  assert.equal(calls,0);
-  assert.deepEqual(manifest().resources[0].idPrefixes,['tt']);
-  assert.equal(manifest().id,'br.jean.beststream');assert.equal(manifest(true).id,'br.jean.beststream.native');
+  assert.equal(calls,1);assert.equal(manifest().id,'br.jean.beststream');assert.equal(manifest(true).id,'br.jean.beststream.native');
+  assert.equal(manifest(true,true).id,'br.jean.beststream.native.bridge');
 });
 test('Play resolution retains only verified video candidates returned by a provider',async()=>{
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Example'}),browser:{resolve:async()=>({status:'resolved',streams:[{url:'https://cdn.test/video.m3u8',format:'HLS',headers:{}}]}),close:async()=>{}}});
@@ -116,6 +113,7 @@ test('provider security challenges are reported before attempting playback',()=>
   assert.equal(hasChallenge('BingeBang','This website uses a security service to protect against malicious bots.'),true);
   assert.equal(hasChallenge('BingeBang','Search movies and TV shows'),false);
   assert.equal(hasChallenge('Verifying your browser - NOXX',''),true);
+  assert.equal(hasChallenge('atlantic.st',"if you're using Cloudflare Warp VPN, please disable it, and refresh your page"),true);
 });
 test('Cinemeta supplies the TMDB mapping instead of guessing by title',async()=>{
   assert.equal(normalize('Coração & Ação'),'coracao acao');
@@ -140,14 +138,14 @@ test('source failures fall through in order without losing the requested title a
   const calls=[];
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'The Matrix',tmdb:603}),browser:{resolve:async(p,v)=>{calls.push(p.id);assert.equal(v.id,'tt0133093');if(p.id==='fprime-at')throw Error('source offline');return p.id==='nexa-mov'?{status:'web-only',streams:[],pageUrl:'https://nexa.mov/watch/tmdb-movie/603'}:{status:'blocked',streams:[]};},close:async()=>{}}});
   const r=await addon.resolve('movie','tt0133093');
-  assert.deepEqual(calls,['fprime-at','moviepal-live','nexa-mov','bingebang-st']);
+  assert.deepEqual(calls,['fprime-at','moviepal-live','reelix-ac','nexa-mov','bingebang-st']);
   assert.equal(r.pageUrl,'https://nexa.mov/watch/tmdb-movie/603');assert.deepEqual(r.streams,[]);
-  assert.equal(r.attempts.length,4);
+  assert.equal(r.attempts.length,5);
 });
 test('slow providers never block the Stremio stream list',async()=>{
-  const addon=createAddon({getMetadata:()=>new Promise(()=>{}),getDirectory:()=>new Promise(()=>{})});
+  const addon=createAddon({streamWaitMs:5,getMetadata:()=>new Promise(()=>{}),getDirectory:()=>new Promise(()=>{})});
   const result=await Promise.race([addon.streams('movie','tt0063350','https://addon.test',true,true),new Promise((_,reject)=>setTimeout(()=>reject(Error('stream list stalled')),100))]);
-  assert.equal(result.streams[0].url,'https://addon.test/bridge/play/movie/tt0063350');
+  assert.deepEqual(result.streams,[]);
 });
 test('an unavailable source is reported by Play resolution and never replaced with HTML',async()=>{
   const addon=createAddon({getDirectory:async()=>({sources:BOOTSTRAP}),getMetadata:async()=>({name:'Breaking Bad',tmdb:1396}),browser:{resolve:async()=>({status:'blocked',streams:[]}),close:async()=>{}}});

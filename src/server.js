@@ -4,13 +4,12 @@ import {fileURLToPath} from 'node:url';
 import {createAddon} from './addon.js';
 import {directory} from './directory.js';
 import {parseVideo} from './metadata.js';
-import {MediaRelay} from './relay.js';
 import {VERSION} from './version.js';
 const assets=new Map();
 const allowedAssets=new Map([['/','index.html'],['/configure','index.html'],['/app.js','app.js'],['/style.css','style.css']]);
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'};
 
-export function createServer(addon=createAddon(),getDirectory=directory,{relay=new MediaRelay(),playTimeoutMs=110_000}={}) {
+export function createServer(addon=createAddon(),getDirectory=directory,{playTimeoutMs=110_000}={}) {
   const limits=new Map();
   const server=http.createServer(async(req,res)=> {
     res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('Access-Control-Allow-Methods','GET, HEAD, OPTIONS');
@@ -36,7 +35,7 @@ export function createServer(addon=createAddon(),getDirectory=directory,{relay=n
       // PUBLIC_BASE_URL or Render's trusted canonical URL prevents forwarded-host poisoning.
       const localPort=server.address()?.port;
       const base=process.env.PUBLIC_BASE_URL||process.env.RENDER_EXTERNAL_URL||`http://127.0.0.1:${localPort}`;
-      if(path.startsWith('/relay/')){await relay.serve(path,req,res);return;}
+      if(path.startsWith('/relay/'))return send(410,{error:'A retransmissão foi removida. Reabra o título no Stremio para receber o link direto da fonte.'});
       const stream=/^\/stream\/(movie|series)\/([^/]+)\.json$/.exec(path);
       const play=/^\/play\/(movie|series)\/([^/]+)$/.exec(path);
       const resolve=path==='/api/resolve';
@@ -55,8 +54,9 @@ export function createServer(addon=createAddon(),getDirectory=directory,{relay=n
             const result=await Promise.race([addon.resolve(video.type,video.id),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tempo de busca esgotado')),playTimeoutMs);})]);
             const selected=result.streams?.find(s=>s.url);
             if(!selected)return send(503,{error:'Nenhuma fonte compatível respondeu para este título ou episódio. Tente novamente mais tarde.'});
-            const location=bridgeMode?relay.register({url:selected.url,format:selected.behaviorHints?.filename?.endsWith('.m3u8')?'HLS':'MP4',headers:selected.behaviorHints?.proxyHeaders?.request||{}}):selected.url;
-            res.writeHead(307,{Location:location,'Cache-Control':'no-store'});res.end();return;
+            // Compatibility for old Play URLs: redirect, never fetch or relay
+            // the movie. New stream responses carry the source URL and headers.
+            res.writeHead(307,{Location:selected.url,'Cache-Control':'no-store'});res.end();return;
           } finally {clearTimeout(timer);}
         }
         return send(200,stream?await addon.streams(video.type,video.id,base,nativeOnly,bridgeMode):await addon.resolve(video.type,video.id));

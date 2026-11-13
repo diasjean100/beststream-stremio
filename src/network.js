@@ -66,23 +66,3 @@ export async function json(url, options) {
   if(r.status!==200) throw new Error(`A fonte respondeu HTTP ${r.status}`);
   try { return JSON.parse(r.body.toString('utf8')); } catch { throw new Error('A fonte não retornou JSON válido'); }
 }
-
-// Streaming transport shares the same destination checks as metadata/media
-// validation, including every redirect, and never buffers a full video.
-export async function openResponse(value,{headers={},method='GET',timeout=20_000,redirects=4,signal}={}) {
-  const target=await publicTarget(value);
-  const response=await new Promise((resolve,reject)=>{
-    const transport=target.url.protocol==='https:'?https:http;
-    const req=transport.request(target.url,{method,signal,headers:{'User-Agent':'Mozilla/5.0 BestStream/0.4','Accept-Encoding':'identity',...headers},
-      lookup(_host,options,callback){const chosen=target.records[0];if(options?.all)callback(null,target.records);else callback(null,chosen.address,chosen.family);}
-    },body=>resolve({status:body.statusCode,headers:body.headers,body,url:target.url.href}));
-    req.setTimeout(timeout,()=>req.destroy(new Error('Tempo de mídia esgotado')));req.on('error',reject);req.end();
-  });
-  if([301,302,303,307,308].includes(response.status)&&response.headers.location) {
-    response.body.destroy();if(redirects<=0)throw Error('Redirecionamentos em excesso');
-    const next=new URL(response.headers.location,target.url);
-    const safeHeaders=next.origin===target.url.origin?headers:Object.fromEntries(Object.entries(headers).filter(([k])=>!['cookie','authorization'].includes(k.toLowerCase())));
-    return openResponse(next,{headers:safeHeaders,method,timeout,redirects:redirects-1,signal});
-  }
-  return response;
-}

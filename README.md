@@ -1,4 +1,4 @@
-# BestStream para Stremio — 0.4.0
+# BestStream para Stremio — 0.4.1
 
 Integração com fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/), com conferência de título/episódio e reprodução de mídia dentro do Stremio. O diretório não hospeda os vídeos e cada site precisa de um adaptador próprio.
 
@@ -15,15 +15,24 @@ Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso 
 
 **Direto, padrão:** ao abrir um título, o add-on procura uma fonte compatível e devolve o endereço de mídia com os cabeçalhos exigidos pela fonte. O Stremio recebe o vídeo do CDN, sem retransmissão completa pelo Render. O manifesto mantém o recurso `stream` para IMDb, incluindo `tt…:temporada:episódio`.
 
-**Ponte, opcional:** marque “Usar ponte pelo servidor” na instalação. O manifesto passa a ser `/bridge/native/manifest.json`. O cartão “BestStream • Automático” consulta a fonte quando se aperta Play; o vídeo, playlists, áudio, chaves HLS e segmentos passam pela ponte HTTP. O servidor preserva os cabeçalhos da fonte, reescreve URLs relativas e aceita requisições de intervalo para avanço no vídeo. URLs, cabeçalhos ou destinos arbitrários não são aceitos nos parâmetros da ponte.
+**Ponte de links, único funcionamento:** o servidor descobre e valida o endereço de mídia; o Stremio recebe esse endereço com os cabeçalhos exigidos. O vídeo vem diretamente da fonte. Não existe mais modo de retransmissão completa pelo Render.
 
-A opção de ponte informa antes da instalação que consome tráfego da hospedagem. **No Render, excedentes de tráfego podem ser cobrados mesmo em serviços Free quando existe meio de pagamento cadastrado.** Não foi contratado um plano pago. Consulte [as regras oficiais](https://render.com/docs/free) e a [franquia de tráfego](https://render.com/docs/outbound-bandwidth). O modo Direto é o padrão para evitar retransmitir filmes pelo servidor.
+As instalações antigas em `/bridge/manifest.json` e `/bridge/native/manifest.json` preservam seus IDs, mas agora retornam os mesmos links diretos. As antigas rotas `/play` só redirecionam para mídia confirmada. `/relay` retorna HTTP 410 e não acessa destinos externos.
+
+A hospedagem continua necessária para executar a busca e fazer verificações limitadas de mídia. O servidor lê playlists e pequenos prefixos de segmentos, sem armazenar nem servir o filme completo. O plano Free foi mantido. Limites da hospedagem continuam se aplicando às consultas: [Render Free](https://render.com/docs/free).
+
+## Correção do aviso Atlantic
+
+A página anterior incluía cartões “Abrir site”, inclusive para Atlantic, que era uma referência sem adaptador. Isso permitia sair do fluxo do Stremio e encontrar avisos/bloqueios do próprio site. Esses cartões e o botão “Abrir título na fonte” foram removidos. A interface agora lista somente as integrações e abre os títulos no Stremio.
+
+Avisos de verificação, VPN/proxy, páginas HTML e fontes indisponíveis não são aceitos como vídeo. O aviso do Atlantic não comprova a existência de VPN no aparelho; essa restrição da fonte não é contornada.
 
 ## Adaptadores e limites
 
 | Fonte | Integração |
 | --- | --- |
 | MoviePal | Página de reprodução com TMDB confirmado pelo Cinemeta, episódio exato, player incorporado e mídia verificada; prioridade do navegador |
+| Reelix | Busca por título com TMDB/tipo/ano exatos e validação da identidade da página e do episódio; integração experimental |
 | Fprime | Configuração pública do frontend e consulta HTTP para o TMDB/episódio exatos; disponibilidade experimental |
 | Nexa | Player do título/episódio exatos; fallback quando a fonte permite obter mídia |
 | BingeBang | Busca e identificação de título/episódio; pode exigir verificação manual |
@@ -33,7 +42,7 @@ MoviePal substitui a dependência principal do Nexa, que deixou de entregar míd
 
 O sistema não contorna autenticação, CAPTCHA ou DRM. Não troca o filme por trailers, demonstrações ou páginas HTML. A conferência usa o mapeamento IMDb/TMDB, a rota da fonte e o episódio exibido; não é uma comparação visual integral da obra. Fontes externas, bloqueios, expiração de links, codecs e a conexão do aparelho continuam determinando a disponibilidade. Não há garantia de todo o catálogo nem de ausência de travamentos.
 
-O Render Free pode suspender por ociosidade e demorar para iniciar. Sessões da ponte são temporárias e se encerram em reinício/deploy; é necessário reabrir o vídeo nesse caso. Links de mídia assinados não são gravados no repositório.
+O Render Free pode suspender por ociosidade e demorar para iniciar. URLs assinadas podem expirar; reabra o título para consultar uma fonte atualizada. Links de mídia assinados não são gravados no repositório.
 
 ## Verificar e executar
 
@@ -47,10 +56,10 @@ npm run check
 npm start
 ```
 
-Os testes locais cobrem protocolo, IDs/episódios, fila de consultas, fallback, mídia, segurança de destinos, playlists e o caminho HTTP de reprodução. Quando FFmpeg está disponível, um teste gera mídia controlada e verifica a decodificação de áudio e vídeo através da ponte; esse material existe apenas no teste.
+Os testes locais cobrem protocolo, IDs/episódios, fila de consultas, fallback, mídia, segurança de destinos, playlists e o caminho HTTP de reprodução. Quando FFmpeg está disponível, um teste gera mídia controlada e comprova que áudio e vídeo são decodificados diretamente do servidor da fonte, enquanto o add-on recebe apenas a consulta de metadados. Esse material existe apenas no teste.
 
 ```sh
-node scripts/bridge-smoke.js # filmes/episódio reais: decodifica áudio e vídeo nos modos Direto e Ponte
+node scripts/bridge-smoke.js # filmes/episódio reais: decodifica áudio e vídeo direto da fonte e verifica os IDs antigos
 node scripts/hosted-smoke.js # verifica a versão publicada e os vídeos a partir de outro servidor
 ```
 

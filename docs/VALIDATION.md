@@ -1,3 +1,15 @@
+# Correção 0.4.1 — ponte apenas de links
+
+Registro iniciado em 13/11/2026 (Brasília). A imagem enviada pelo usuário exibe um aviso do domínio Atlantic sobre VPN/proxy. Isso não prova que o aparelho utiliza VPN nem que o Render tenha causado o aviso. O diretório publicado tinha Atlantic com `adapter: null`, mas a interface oferecia “Abrir site”. Esse caminho manual foi removido.
+
+O código de retransmissão de vídeo e seu transporte de streaming foram excluídos. Todos os quatro IDs de instalação anteriores passam a devolver URLs da fonte e cabeçalhos do player. As rotas antigas Play apenas redirecionam; `/relay` retorna 410. A hospedagem executa consultas e verificações limitadas, sem servir o filme completo.
+
+27 testes locais passaram, incluindo um teste FFmpeg que recebeu áudio/vídeo do servidor de origem e verificou que o servidor do add-on recebeu somente a consulta de streams. Sintaxe e diff foram verificados. Os adaptadores continuam sujeitos aos bloqueios e mudanças das fontes. Reelix foi acrescentado como integração experimental com confirmação de TMDB, tipo, título e episódio.
+
+Os resultados das versões anteriores abaixo são históricos; testes locais não substituem a verificação externa da versão publicada.
+
+---
+
 # Validação — BestStream 0.4.0
 
 Registro de 12/11/2026 (horário de Brasília). Resultados se limitam às amostras, conexões e duração descritas.

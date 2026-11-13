@@ -1,4 +1,4 @@
-name: Verify native bridge audio and video
+name: Verify link-only bridge audio and video
 on:
   push:
     branches: [fix/native-bridge]

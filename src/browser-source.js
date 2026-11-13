@@ -1,6 +1,7 @@
 import { publicTarget } from './network.js';
 import { mediaUrl, playerIdentity, validateMedia } from './media.js';
 import {FprimeSource} from './fprime-source.js';
+import {reelixPlaybackUrl,reelixIdentity} from './reelix-source.js';
 
 const TIMEOUT=50_000;
 export const normalize=s=>s.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -43,7 +44,7 @@ export class BrowserSource {
     try{return await task;}finally{this.waiting--;}
   }
   async resolveInBrowser(provider,video,meta) {
-    if(!['bingebang-st','nexa-mov','moviepal-live'].includes(provider.id)) return {status:'unsupported',streams:[],message:'Fonte sem adaptador de reprodução.'};
+    if(!['bingebang-st','nexa-mov','moviepal-live','reelix-ac'].includes(provider.id)) return {status:'unsupported',streams:[],message:'Fonte sem adaptador de reprodução.'};
     if(provider.id==='nexa-mov'&&!nexaPlaybackUrl(video,meta))return {status:'unsupported',streams:[],message:'O identificador desta fonte não foi confirmado para este vídeo.'};
     if(provider.id==='moviepal-live'&&(!Number.isSafeInteger(meta.tmdb)||meta.tmdb<1))return{status:'unsupported',streams:[]};
     this.running=true;
@@ -67,7 +68,7 @@ export class BrowserSource {
             if(this.checked.size>200)this.checked.delete(this.checked.keys().next().value);
           }
           // Capture playlist requests, but do not download video segments on the server.
-          if(/\.(ts|m4s)(?:$|[?#])/i.test(u.href)) return route.abort();
+          if(/\.(ts|m4s|mp4|webm|aac|mp3|png|jpe?g|webp)(?:$|[?#])/i.test(u.href)) return route.abort();
           return route.continue();
         } catch {return route.abort();}
       });
@@ -90,6 +91,26 @@ export class BrowserSource {
           candidates.push({url,...(hls?{format:'HLS'}:{}),headers:{...(requestHeaders.referer?{Referer:requestHeaders.referer}:{}),...(requestHeaders.origin?{Origin:requestHeaders.origin}:{}),...(requestHeaders['user-agent']?{'User-Agent':requestHeaders['user-agent']}:{})}});
         }
       });
+      if(provider.id==='reelix-ac') {
+        stage='reelix-search';
+        const playerUrl=await reelixPlaybackUrl(video,meta);
+        if(!playerUrl)return{status:'not-found',streams:[]};
+        stage='reelix-player';
+        await page.goto(playerUrl,{waitUntil:'domcontentloaded',timeout:10000});
+        if(await challenge(page))return{status:'blocked',streams:[]};
+        const identity=await page.locator('[data-watch-page]').first().evaluate(el=>({...el.dataset})).catch(()=>null);
+        if(page.url()!==playerUrl||!reelixIdentity(identity,video,meta))return{status:'not-found',streams:[]};
+        stage='reelix-play';
+        for(let pass=0;pass<3&&!candidates.length;pass++) {
+          for(const frame of page.frames()) {
+            const play=frame.getByRole('button',{name:/^(play|play video|watch now|resume)$/i}).first();
+            if(await play.isVisible().catch(()=>false))await play.click({timeout:1500,noWaitAfter:true}).catch(()=>{});
+          }
+          await page.waitForResponse(r=>mediaUrl(r.url()),{timeout:4000}).catch(()=>{});
+        }
+        const verified=await verifyCandidates(candidates,page);
+        return{status:verified.length?'resolved':'unavailable',streams:verified,pageUrl:playerUrl};
+      }
       if(provider.id==='moviepal-live') {
         stage='moviepal-player';
         const playerUrl=`https://moviepal.live/${video.type==='series'?'tv':'movie'}/watch/${meta.tmdb}${video.type==='series'?`?season=${video.season}&episode=${video.episode}`:''}`;
@@ -242,7 +263,7 @@ async function verifyCandidates(candidates,page) {
   return [];
 }
 export function hasChallenge(title, text) {
-  return /just a moment|checking your browser|verifying your browser|making sure you.re not a bot|attention required.*cloudflare|verify you are human|complete the security check|performing security verification|protect against malicious bots/i.test(`${title} ${text}`);
+  return /just a moment|checking your browser|verifying your browser|making sure you.re not a bot|attention required.*cloudflare|verify you are human|complete the security check|performing security verification|protect against malicious bots|cloudflare warp vpn|unblocked school proxy|please disable (?:your )?vpn/i.test(`${title} ${text}`);
 }
 async function challenge(page) {
   return hasChallenge(await page.title(), (await page.locator('body').innerText()).slice(0,2500));
