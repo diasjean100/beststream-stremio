@@ -1,4 +1,50 @@
-# Validação — BestStream 0.3.1
+# Validação — BestStream 0.4.0
+
+Registro de 12/11/2026 (horário de Brasília). Resultados se limitam às amostras, conexões e duração descritas.
+
+## Falha reproduzida na versão anterior
+
+O serviço publicado na versão 0.3.1 respondeu à consulta de The Matrix sem streams, após aproximadamente um minuto. Os logs de produção também mostraram consultas Nexa com zero candidatos e timeouts em Play. Os resultados de 07/11 abaixo são históricos e não comprovam disponibilidade atual.
+
+## Mudança verificada
+
+O modo Direto prioriza MoviePal e entrega mídia e cabeçalhos ao Stremio; o vídeo vem do CDN. O modo Ponte é uma instalação opcional que começa a busca ao apertar Play e retransmite a mídia pelo servidor. A página avisa sobre tráfego e possíveis excedentes do Render antes de selecionar esse modo.
+
+A fila serializa consultas de navegador. Uma consulta HTTP pode avançar junto com o navegador, sem abrir vários Chromium ao mesmo tempo. Falhas de uma fonte não são transformadas em links HTML apresentados como vídeo.
+
+## Testes locais
+
+27 testes passaram, incluindo a decodificação de áudio e vídeo através da ponte com um HLS gerado exclusivamente para o teste. A verificação de sintaxe e `git diff --check` passaram. Testes controlados não provam a disponibilidade das fontes externas.
+
+## Filmes e episódio reais
+
+Execução aprovada: https://github.com/diasjean100/beststream-stremio/actions/runs/43353699982
+
+Código: `24509f92c13ac09ecc21d2bf5416c3d5e79597a7`.
+
+O teste abriu os endpoints do add-on no runner, recebeu o stream, requisitou a mídia e usou FFmpeg para decodificar seis segundos com faixas de vídeo e áudio obrigatórias, tanto no modo Direto quanto na Ponte. URLs assinadas e cabeçalhos da fonte não foram publicados nos logs.
+
+| Amostra | Fonte | Lista de streams | Áudio e vídeo direto | Áudio e vídeo pela ponte |
+| --- | --- | ---: | --- | --- |
+| The Matrix — tt0133093 | MoviePal | 5,8 s | Passou | Passou |
+| Inception — tt1375666 | MoviePal | 3,5 s | Passou | Passou |
+| Teen Wolf S1E1 — tt1567432:1:1 | MoviePal | 4,8 s | Passou | Passou |
+
+Os tempos são observações da execução, sem garantia para outra rede ou para o primeiro acesso após suspensão. Fprime não validou mídia nessas consultas. Nexa e BingeBang são alternativas experimentais, não cobertura adicional confirmada nesta versão.
+
+O workflow de protocolo também passou: https://github.com/diasjean100/beststream-stremio/actions/runs/43353699957 .
+
+## Limites e verificação da hospedagem
+
+A reprodução em um aplicativo Stremio real no celular/TV do usuário não foi executada. Não foi assistido o filme inteiro, nem verificada a língua de cada faixa, todas as legendas ou todo o catálogo. A identificação combina o IMDb/TMDB, a página da fonte e o episódio exibido; não foi feita uma identificação visual integral da obra.
+
+O workflow `hosted-check.yml` verifica separadamente o commit publicado no Render e consulta as playlists e bytes de vídeo a partir de outro servidor. Um deploy aceito, um manifesto respondendo e esse teste de mídia são verificações distintas. O estado atual da publicação deve ser conferido em `/healthz` e nas execuções desse workflow.
+
+A ponte opcional consome tráfego do Render; o modo Direto é o padrão. Não foi alterado o plano Free nem contratado recurso pago. Referências de cobrança: https://render.com/docs/free e https://render.com/docs/outbound-bandwidth .
+
+---
+
+# Histórico — BestStream 0.3.1
 
 Registro atualizado em 07/11/2026. Resultados de rede descrevem as amostras e as conexões utilizadas, sem garantia de todo o catálogo ou disponibilidade futura.
 
