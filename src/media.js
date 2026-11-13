@@ -53,7 +53,7 @@ async function playableHls(text,url,headers,get,depth=0) {
   }
   return videoPrefix(bytes)?bytes:null;
 }
-export async function validateMedia(candidate, get=request, {inspect=inspectContent}={}) {
+export async function validateMedia(candidate, get=request, {inspect=inspectContent,onReject}={}) {
   if(!mediaUrl(candidate.url) && candidate.format!=='HLS') return null;
   try {
     const target=new URL(candidate.url);
@@ -66,7 +66,7 @@ export async function validateMedia(candidate, get=request, {inspect=inspectCont
     const bytes=hls?await playableHls(r.body.toString(),r.url,candidate.headers||{},get):binaryVideo?r.body:null;
     if(!bytes)return null;
     const inspection=await inspect(bytes);
-    if(!inspection.ok){console.info(JSON.stringify({event:'media_rejected',reason:inspection.reason||'unverified-frame'}));return null;}
+    if(!inspection.ok){const reason=inspection.reason||'unverified-frame';onReject?.(reason);console.info(JSON.stringify({event:'media_rejected',reason}));return null;}
     return {...candidate,url:r.url,format:hls?'HLS':'MP4',validatedAt:new Date().toISOString(),inspection:inspection.method||'frame-and-ocr'};
   } catch { return null; }
 }

@@ -1,3 +1,15 @@
+# Ajuste 0.5.2 — aguardar o player real
+
+A validação publicada da 0.5.1 também encontrou listas vazias no primeiro acesso: https://github.com/diasjean100/beststream-stremio/actions/runs/43425572114 . Consultas posteriores receberam mídia, incluindo Teen Wolf com quadros verificados em outra conexão. Os filmes não foram validados nessa conexão local.
+
+Os cabeçalhos dos streams revelaram que a mídia atribuída a Charlie/Delta tinha origem no player Cinesrc (Alpha). Portanto, a priorização da 0.5.1 usou uma atribuição que a inspeção posterior não confirmou. O player demorava a ficar interativo no Render; dois cliques iniciais terminavam cedo e a descoberta era abandonada. Probes de áudio também podiam chegar antes da mídia de vídeo.
+
+A 0.5.2 acompanha o controle Play durante o orçamento da fonte, continua após probes não reproduzíveis e troca imediatamente ao identificar o aviso Atlantic. Respostas de frames já removidos são ignoradas. Chromium é preparado ao iniciar o serviço e continua sendo encerrado por ociosidade. O novo teste controlado exige recuperar vídeo quando Play só aparece depois das duas tentativas que a implementação anterior fazia.
+
+A conferência real no runner da 0.5.1 passou para os três títulos, com áudio/vídeo e quadros aos 60 e 300 segundos: https://github.com/diasjean100/beststream-stremio/actions/runs/43425164280 . Esses quadros foram baixados e as imagens dos três títulos também foram inspecionadas visualmente. Isso não eliminou a necessidade de testar o primeiro acesso no Render.
+
+---
+
 # Ajuste 0.5.1 — prazo de resposta na hospedagem
 
 A versão 0.5.0 entrou em produção no Render em 13/11/2026, commit `3543bb74555b063a8af05e880d597485e36fc199`. O filtro registrou `blocked-slate` na hospedagem: o aviso codificado foi efetivamente rejeitado.

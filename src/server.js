@@ -82,6 +82,12 @@ export function createServer(addon=createAddon(),getDirectory=directory,{playTim
   return server;
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)) {
-  const server=createServer();server.listen(Number(process.env.PORT)||7000,'0.0.0.0',()=>console.log('BestStream is listening'));
+  const addon=createAddon(),server=createServer(addon);
+  server.listen(Number(process.env.PORT)||7000,'0.0.0.0',()=>{
+    console.log('BestStream is listening');
+    // Render's startup readiness interval can prepare Chromium before the first
+    // Stremio request. Idle release still closes it after 45 seconds.
+    addon.warm().catch(()=>console.warn(JSON.stringify({event:'browser_warm_failed'})));
+  });
   for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>{server.close();setTimeout(()=>process.exit(0),8000).unref();});
 }

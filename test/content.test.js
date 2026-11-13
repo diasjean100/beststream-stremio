@@ -65,8 +65,17 @@ test('all installed add-on aliases suppress a decodable blocked video returned b
 });
 
 test('MoviePal switches server after a rejected video without leaving the selected title page',async()=>{
-  const candidates=[{url:'https://cdn.test/warning.m3u8'}],clicked=[];
-  const page={getByRole:(_role,{name})=>({first:()=>({isVisible:async()=>true,click:async()=>{clicked.push(name);candidates.push({url:'https://cdn.test/control.m3u8'});}})})};
-  const result=await moviepalServers(page,candidates,()=>{candidates.length=0;},{verify:async list=>list.filter(c=>c.url.includes('/control.'))});
+  const candidates=[{url:'https://cdn.test/warning.m3u8'}],clicked=[],verified=[];
+  const page={frames:()=>[],getByRole:(_role,{name})=>({first:()=>({isVisible:async()=>true,click:async()=>{clicked.push(name);candidates.push({url:'https://cdn.test/control.m3u8'});}})})};
+  const result=await moviepalServers(page,candidates,()=>{candidates.length=0;},{verify:async(list,_page,{onBlocked})=>{verified.push(list.map(c=>c.url));if(list.some(c=>c.url.includes('/warning.')))onBlocked();return list.filter(c=>c.url.includes('/control.'));}});
   assert.deepEqual(clicked,['Charlie']);assert.equal(result[0].url,'https://cdn.test/control.m3u8');
+  assert.deepEqual(verified,[['https://cdn.test/warning.m3u8'],['https://cdn.test/control.m3u8']]);
+});
+
+test('a delayed Play control and an early audio probe do not make MoviePal abandon the video',async()=>{
+  const candidates=[{url:'https://cdn.test/audio-probe.mp4'}];let polls=0;
+  const frame={getByRole:()=>({first:()=>({isVisible:async()=>polls>=3,click:async()=>candidates.push({url:'https://cdn.test/video.m3u8'})})})};
+  const page={frames:()=>[frame],waitForResponse:async()=>{polls++;await new Promise(r=>setTimeout(r,5));},getByRole:()=>{throw Error('The selected source was abandoned too early');}};
+  const result=await moviepalServers(page,candidates,()=>{throw Error('The selected title must stay open');},{serverBudgetMs:1000,verify:async list=>list.filter(c=>c.url.endsWith('/video.m3u8'))});
+  assert.equal(result[0].url,'https://cdn.test/video.m3u8');assert.ok(polls>=3);
 });

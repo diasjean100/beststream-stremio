@@ -83,9 +83,10 @@ export class BrowserSource {
       const capture=(url,headers={},format)=>{
         if((mediaUrl(url)||format==='HLS')&&!/trailer|preview|youtube|introdb/i.test(url)&&!candidates.some(c=>c.url===url))candidates.push({url,...(format?{format}:{}),headers:{...(headers.referer?{Referer:headers.referer}:{}),...(headers.origin?{Origin:headers.origin}:{}),...(headers['user-agent']?{'User-Agent':headers['user-agent']}:{} )}});
       };
-      page.on('request',r=>{requestGeneration.set(r,generation);if(mediaUrl(r.url()))capture(r.url(),r.headers());});
+      page.on('request',r=>{try{if(r.frame().isDetached())return;}catch{return;}requestGeneration.set(r,generation);if(mediaUrl(r.url()))capture(r.url(),r.headers());});
       page.on('response', response=> {
         if(requestGeneration.get(response.request())!==generation)return;
+        try{if(response.request().frame().isDetached())return;}catch{return;}
         const url=response.url();
         if(response.status()>=400){const index=candidates.findIndex(c=>c.url===url);if(index>=0)candidates.splice(index,1);return;}
         const mime=String(response.headers()['content-type']||'');
@@ -244,7 +245,7 @@ export class BrowserSource {
     }
   }
 }
-async function verifyCandidates(candidates,page) {
+async function verifyCandidates(candidates,page,{onBlocked}={}) {
   const checked=new Set();
   for(let pass=0;pass<5&&checked.size<6;pass++) {
     // Audio-only playlists and capability probes can arrive before the video.
@@ -254,8 +255,10 @@ async function verifyCandidates(candidates,page) {
     // The frame inspector is serial. Waiting for an entire parallel batch kept
     // a good stream behind a duplicate decode and could miss Stremio's deadline.
     for(const candidate of batch) {
-      const verified=await validateMedia(candidate);
+      let blocked=false;
+      const verified=await validateMedia(candidate,undefined,{onReject:reason=>{if(reason==='blocked-slate')blocked=true;}});
       if(verified)return [verified];
+      if(blocked){onBlocked?.();return [];}
     }
     if(candidates.some(c=>!checked.has(c.url)))continue;
     if(!page||pass>=4)break;
@@ -263,13 +266,11 @@ async function verifyCandidates(candidates,page) {
   }
   return [];
 }
-export async function moviepalServers(page,candidates,reset,{verify=verifyCandidates}={}) {
+export async function moviepalServers(page,candidates,reset,{verify=verifyCandidates,serverBudgetMs=18_000}={}) {
   // These are the actual server controls in MoviePal's public player. Keep the
   // already-confirmed title/season/episode page while changing only its source.
   let selected='Alpha';
-  // Charlie produced verified media on the deployed Render host. Alpha/Beta
-  // produced no candidates there and previously exhausted the response budget.
-  for(const server of ['Charlie','Alpha','Beta','Delta','Echo']) {
+  for(const server of ['Alpha','Charlie','Beta','Delta','Echo']) {
     if(server!==selected) {
       const button=page.getByRole('button',{name:server,exact:true}).first();
       if(!await button.isVisible().catch(()=>false))continue;
@@ -277,15 +278,22 @@ export async function moviepalServers(page,candidates,reset,{verify=verifyCandid
       await button.click({timeout:1500,noWaitAfter:true}).catch(()=>{});
       selected=server;
     }
-    for(let pass=0;pass<2&&!candidates.length;pass++) {
+    const until=Date.now()+serverBudgetMs,checked=new Set();
+    let blocked=false,verified=[];
+    // On the free host the iframe can become interactive after the old two
+    // clicks had already finished. Watch for its Play control throughout the
+    // source budget; audio/capability probes do not end the discovery phase.
+    do {
       for(const frame of page.frames()) {
         const play=frame.getByRole('button',{name:/^(play|play video|watch now|resume)$/i}).first();
         if(await play.isVisible().catch(()=>false))await play.click({timeout:1000,noWaitAfter:true}).catch(()=>{});
       }
-      if(!candidates.length)await page.waitForResponse(r=>mediaUrl(r.url()),{timeout:3000}).catch(()=>{});
-    }
-    // Do not wait repeatedly for the same rejected slate before switching.
-    const verified=await verify(candidates);
+      const fresh=candidates.filter(c=>!checked.has(c.url)).slice(0,6-checked.size);
+      for(const candidate of fresh)checked.add(candidate.url);
+      if(fresh.length)verified=await verify(fresh,undefined,{onBlocked:()=>{blocked=true;}});
+      if(verified.length||blocked||checked.size>=6)break;
+      await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:500}).catch(()=>{});
+    }while(Date.now()<until);
     console.info(JSON.stringify({event:'moviepal_server',server,candidates:candidates.length,verified:verified.length}));
     if(verified.length)return verified;
   }
