@@ -55,7 +55,7 @@ export async function auditFrame(candidate,seconds,get=request) {
     if(init.status!==200)throw Error('map-unavailable');
     bytes=Buffer.concat([init.body,bytes]);
   }
-  const decoded=spawnSync('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-protocol_whitelist','pipe','-threads','1','-i','pipe:0',
+  const decoded=spawnSync('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-filter_threads','1','-protocol_whitelist','pipe','-threads','1','-i','pipe:0',
     '-map','0:v:0','-frames:v','1','-vf','scale=960:-2','-threads','1','-f','image2pipe','-vcodec','png','pipe:1'],{input:bytes,timeout:15000,maxBuffer:2_000_000});
   if(decoded.status!==0||decoded.stdout.length<100)throw Error('frame-decode-failed');
   const ocr=spawnSync('tesseract',['stdin','stdout','-l','eng','--psm','11'],{input:decoded.stdout,timeout:6000,maxBuffer:16000,env:{...process.env,OMP_THREAD_LIMIT:'1'}});

@@ -1,4 +1,4 @@
-# BestStream para Stremio — 0.5.0
+# BestStream para Stremio — 0.5.1
 
 Integração com fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/), com conferência de título/episódio e reprodução de mídia dentro do Stremio. O diretório não hospeda os vídeos e cada site precisa de um adaptador próprio.
 
@@ -9,7 +9,7 @@ Abra https://beststream-stremio-jean.onrender.com/ e use **Adicionar ao Stremio*
 - `https://beststream-stremio-jean.onrender.com/native/manifest.json`
 - `https://beststream-stremio-jean.onrender.com/manifest.json`
 
-Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os quatro manifestos antigos recebem a mesma validação de vídeo. A fonte exibida no Stremio inclui a versão 0.5.0 para facilitar a conferência.
+Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os quatro manifestos antigos recebem a mesma validação de vídeo. A fonte exibida no Stremio inclui a versão 0.5.1 para facilitar a conferência.
 
 ## Fluxo de reprodução
 
@@ -27,7 +27,7 @@ Em 13/11/2026 a auditoria reproduziu a imagem do usuário ao decodificar um stre
 
 A validação agora lê no máximo 1 MiB do primeiro segmento, decodifica um quadro com FFmpeg e extrai texto com Tesseract. Avisos identificados como Atlantic, Cloudflare Warp ou classroom.best são rejeitados. Falhas no decodificador ou OCR também impedem a oferta do candidato. Isso verifica o quadro inicial, não identifica integralmente o filme nem garante que um bloqueio não apareça depois ou em outra conexão.
 
-MoviePal tenta os controles reais Alpha, Beta, Charlie, Delta e Echo antes de desistir, preservando a página do título/episódio confirmado. Um aviso rejeitado não é apresentado como uma opção para assistir. A página de instalação também deixou de incluir o link de saída para o diretório e exibe o endereço para instalação manual.
+MoviePal tenta os controles reais Charlie, Alpha, Beta, Delta e Echo antes de desistir, preservando a página do título/episódio confirmado. Um aviso rejeitado não é apresentado como uma opção para assistir. A página de instalação também deixou de incluir o link de saída para o diretório e exibe o endereço para instalação manual.
 
 ## Adaptadores e limites
 

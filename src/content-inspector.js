@@ -30,7 +30,7 @@ export async function inspectContent(bytes) {
   // Keep the decoder/OCR memory bounded alongside Chromium on the free host.
   const task=queue.then(async()=>{
     try {
-      const frame=await processBytes('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-protocol_whitelist','pipe',
+      const frame=await processBytes('ffmpeg',['-nostdin','-hide_banner','-loglevel','error','-filter_threads','1','-protocol_whitelist','pipe',
         '-probesize','1048576','-analyzeduration','2000000','-threads','1','-i','pipe:0','-map','0:v:0',
         '-frames:v','1','-vf','scale=min(960\\,iw):-2','-threads','1','-f','image2pipe','-vcodec','png','pipe:1'],bytes,2_000_000);
       if(frame.length<100)return {ok:false,reason:'unverified-frame'};

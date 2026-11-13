@@ -251,8 +251,12 @@ async function verifyCandidates(candidates,page) {
     // Check later captured candidates as well, with only two HTTP checks at once.
     const batch=candidates.filter(c=>!checked.has(c.url)).slice(0,Math.min(2,6-checked.size));
     for(const c of batch)checked.add(c.url);
-    const verified=(await Promise.all(batch.map(c=>validateMedia(c)))).filter(Boolean);
-    if(verified.length)return verified;
+    // The frame inspector is serial. Waiting for an entire parallel batch kept
+    // a good stream behind a duplicate decode and could miss Stremio's deadline.
+    for(const candidate of batch) {
+      const verified=await validateMedia(candidate);
+      if(verified)return [verified];
+    }
     if(candidates.some(c=>!checked.has(c.url)))continue;
     if(!page||pass>=4)break;
     await page.waitForResponse(r=>!checked.has(r.url())&&r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:1800}).catch(()=>{});
@@ -262,12 +266,16 @@ async function verifyCandidates(candidates,page) {
 export async function moviepalServers(page,candidates,reset,{verify=verifyCandidates}={}) {
   // These are the actual server controls in MoviePal's public player. Keep the
   // already-confirmed title/season/episode page while changing only its source.
-  for(const server of ['Alpha','Beta','Charlie','Delta','Echo']) {
-    if(server!=='Alpha') {
+  let selected='Alpha';
+  // Charlie produced verified media on the deployed Render host. Alpha/Beta
+  // produced no candidates there and previously exhausted the response budget.
+  for(const server of ['Charlie','Alpha','Beta','Delta','Echo']) {
+    if(server!==selected) {
       const button=page.getByRole('button',{name:server,exact:true}).first();
       if(!await button.isVisible().catch(()=>false))continue;
       reset();
       await button.click({timeout:1500,noWaitAfter:true}).catch(()=>{});
+      selected=server;
     }
     for(let pass=0;pass<2&&!candidates.length;pass++) {
       for(const frame of page.frames()) {

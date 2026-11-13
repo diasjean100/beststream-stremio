@@ -1,3 +1,15 @@
+# Ajuste 0.5.1 — prazo de resposta na hospedagem
+
+A versão 0.5.0 entrou em produção no Render em 13/11/2026, commit `3543bb74555b063a8af05e880d597485e36fc199`. O filtro registrou `blocked-slate` na hospedagem: o aviso codificado foi efetivamente rejeitado.
+
+O teste publicado https://github.com/diasjean100/beststream-stremio/actions/runs/43423714282 falhou: os três endpoints retornaram lista vazia após 25 segundos. Os logs mostraram que MoviePal Alpha e Beta não produziram candidatos nesse host. Charlie validou mídia depois do prazo. Isso revelou uma segunda falha de integração que os testes apenas no runner não reproduziam.
+
+A versão 0.5.1 prioriza Charlie, preserva os outros servidores como fallback e devolve o primeiro candidato que passa em todas as verificações, sem esperar pela validação duplicada de outros candidatos. Os filtros do FFmpeg também usam um thread para respeitar os recursos do host. O prazo não foi ampliado para esconder a demora. O comportamento publicado é retestado após o deploy.
+
+O teste de quadros posteriores foi corrigido para selecionar os segmentos pelos tempos da playlist, sem depender do seek remoto do FFmpeg. O teste anterior de captura por seek falhou para os filmes, sem produzir imagens; por isso não comprovava bloqueio nem reprodução desses trechos. Teen Wolf foi capturado e inspecionado visualmente aos 60 e 300 segundos, com cenas de vídeo e sem o aviso, no runner. A conferência com segmentos limitados exige novamente que os três títulos passem.
+
+---
+
 # Auditoria 0.5.0 — aviso codificado no vídeo
 
 Registro de 13/11/2026. Esta auditoria corrige a interpretação dos testes históricos abaixo: decodificar faixas de áudio e vídeo não comprova que os quadros contêm o filme solicitado.
@@ -14,7 +26,7 @@ A validação precisa decodificar um quadro do prefixo limitado do primeiro segm
 
 O arquivo `test/fixtures/atlantic-warning.ts` é um trecho de aproximadamente 73 KiB do aviso reproduzido; não contém URLs assinadas, chaves ou dados de conta. Ele demonstra o falso positivo anterior: tem assinatura MPEG-TS e quadros decodificáveis, mas não é uma opção de reprodução válida. O teste exige sua rejeição em todos os quatro manifestos antigos e nas rotas Play. Um controle de vídeo gerado no teste é aceito.
 
-A troca de servidores de MoviePal preserva o título e episódio e descarta candidatos da tentativa anterior. Sua verificação controlada testa a passagem de Alpha recusado para Beta utilizável. Disponibilidade em fontes reais é conferida separadamente; testes controlados não são prova de catálogo externo disponível.
+A troca de servidores de MoviePal preserva o título e episódio e descarta candidatos da tentativa anterior. Sua verificação controlada testa a seleção de Charlie utilizável após a origem inicial recusada. Disponibilidade em fontes reais é conferida separadamente; testes controlados não são prova de catálogo externo disponível.
 
 33 testes locais passaram, sem skips; a checagem de sintaxe passou. Testes externos e publicação desta versão são registrados após a conclusão das respectivas execuções.
 
