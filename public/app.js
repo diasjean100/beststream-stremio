@@ -5,9 +5,9 @@ const safeUrl=value=>{try{const u=new URL(value);return ['http:','https:'].inclu
 function node(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
 let toastTimer;
 function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,3000);}
-async function copy(text){try{await navigator.clipboard.writeText(text);toast('Copiado!');}catch{toast(`Selecione e copie: ${text}`);}}
+async function copy(text){try{await navigator.clipboard.writeText(text);toast('Copiado!');}catch{const field=$('#manifest-address');field.focus();field.select();toast('Mantenha o endereço selecionado e toque em Copiar.');}}
 function manifestUrl(){return `${location.origin}/native/manifest.json`;}
-function updateInstall(){$('#install').href=manifestUrl().replace(/^https?:\/\//,'stremio://');}
+function updateInstall(){$('#install').href=manifestUrl().replace(/^https?:\/\//,'stremio://');$('#manifest-address').value=manifestUrl();}
 $('#copy').addEventListener('click',()=>copy(manifestUrl()));updateInstall();
 async function api(url){const response=await fetch(url);let data;try{data=await response.json();}catch{throw Error('O servidor ainda está iniciando. Tente novamente em instantes.');}if(!response.ok)throw Error(data.error||'Não foi possível consultar agora.');return data;}
 function renderSources(){

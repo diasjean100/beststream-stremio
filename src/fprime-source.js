@@ -6,7 +6,7 @@ import {validateMedia} from './media.js';
 // Discover the public playback request used by the site's current frontend.
 // Never execute downloaded JavaScript or retain signed media URLs on disk.
 export class FprimeSource {
-  constructor({get=request}={}){this.get=get;this.cache=new Cache(2);}
+  constructor({get=request,inspect}={}){this.get=get;this.inspect=inspect;this.cache=new Cache(2);}
   async config(){return this.cache.use('config',6*60*60_000,async()=>{
     const read=async url=>{const r=await this.get(url,{maxBytes:2_000_000,timeout:6500});if(r.status!==200)throw Error('Fonte indisponível');return r.body.toString();};
     const html=await read('https://fprime.at/');
@@ -33,7 +33,7 @@ export class FprimeSource {
       stage='url-data';
       const url=await unwrapPublicUrl(raw,key);
       stage='media-validation';
-      const candidate=await validateMedia({url,format:'HLS',headers:{Referer:'https://fprime.at/',Origin:'https://fprime.at'}},this.get);
+      const candidate=await validateMedia({url,format:'HLS',headers:{Referer:'https://fprime.at/',Origin:'https://fprime.at'}},this.get,{inspect:this.inspect});
       return{status:candidate?'resolved':'unavailable',streams:candidate?[candidate]:[],message:candidate?'Vídeo verificado na fonte Fprime.':'A fonte não confirmou mídia compatível.'};
     }catch(error){console.warn(JSON.stringify({event:'provider_failure',provider:'fprime-at',stage,error:error.name}));return{status:'unavailable',streams:[],diagnosticStage:stage,message:'A fonte Fprime não concluiu a consulta.'};}
   }

@@ -5,13 +5,16 @@ import {createAddon} from '../src/addon.js';
 import {createServer} from '../src/server.js';
 import {BrowserSource} from '../src/browser-source.js';
 import {metadata,parseVideo} from '../src/metadata.js';
+import {mkdir} from 'node:fs/promises';
 const addon=createAddon(),server=createServer(addon);
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const base=`http://127.0.0.1:${server.address().port}`;
 let failed=0;
-function decode(url,headers={}){return new Promise(resolve=>{
+await mkdir('audit-frames',{recursive:true});
+function decode(url,headers={},frameName){return new Promise(resolve=>{
   const extra=Object.keys(headers).length?['-headers',Object.entries(headers).map(([key,value])=>`${key}: ${value}\r\n`).join('')]:[];
-  const args=['-nostdin','-hide_banner','-loglevel','error','-rw_timeout','140000000',...extra,'-i',url,'-t','6','-map','0:v:0','-map','0:a:0','-f','null','-'];
+  const frame=frameName?['-map','0:v:0','-frames:v','1','-vf','scale=960:-2','-threads','1',`audit-frames/${frameName}.png`]:[];
+  const args=['-nostdin','-hide_banner','-loglevel','error','-rw_timeout','140000000',...extra,'-i',url,...frame,'-t','6','-map','0:v:0','-map','0:a:0','-f','null','-'];
   const child=spawn('ffmpeg',args,{stdio:['ignore','ignore','pipe']});
   let stage='decoder';child.stderr.on('data',()=>{stage='decoder-reported-error';});
   const timer=setTimeout(()=>child.kill('SIGKILL'),150000);
@@ -24,7 +27,7 @@ try{
     const list=await(await fetch(`${base}/native/stream/${type}/${id}.json`)).json();
     const listedMs=Date.now()-start;
     const selected=list.streams[0];
-    const result=selected?await decode(selected.url,selected.behaviorHints?.proxyHeaders?.request||{}):{ok:false,stage:'no-native-source'};
+    const result=selected?await decode(selected.url,selected.behaviorHints?.proxyHeaders?.request||{},id.replaceAll(':','-')):{ok:false,stage:'no-native-source'};
     let aliasesDirect=true;
     for(const prefix of ['','/bridge','/bridge/native']){
       const alias=await(await fetch(`${base}${prefix}/stream/${type}/${id}.json`)).json();

@@ -1,4 +1,8 @@
 import { request } from './network.js';
+import {createDecipheriv} from 'node:crypto';
+import {inspectContent} from './content-inspector.js';
+import {VERSION} from './version.js';
+export const PROBE_BYTES=1024*1024;
 export function mediaUrl(value) {
   try { const u=new URL(value); return ['http:','https:'].includes(u.protocol) && !u.username && !u.password && /\.(m3u8|mp4|webm)(?:$|[?#])/i.test(u.href); } catch { return false; }
 }
@@ -12,43 +16,59 @@ export function videoPrefix(body) {
   return false;
 }
 async function playableHls(text,url,headers,get,depth=0) {
-  if(!validHls(text)||depth>2)return false;
+  if(!validHls(text)||depth>2)return null;
   const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const variant=lines.findIndex(s=>s.startsWith('#EXT-X-STREAM-INF:'));
   if(variant>=0) {
-    const path=lines[variant+1];if(!path||path.startsWith('#'))return false;
+    const path=lines[variant+1];if(!path||path.startsWith('#'))return null;
     const r=await get(new URL(path,url).href,{headers,maxBytes:1_000_000,timeout:6500});
-    return r.status===200&&playableHls(r.body.toString(),r.url,headers,get,depth+1);
+    return r.status===200?playableHls(r.body.toString(),r.url,headers,get,depth+1):null;
   }
-  const segment=lines.find(s=>!s.startsWith('#'));if(!segment)return false;
-  const r=await get(new URL(segment,url).href,{headers,maxBytes:65536,prefixBytes:65536,timeout:6500});
-  if(![200,206].includes(r.status)||r.body.length<564)return false;
-  if(/<\s*(?:!doctype|html)|^\s*\{/.test(r.body.subarray(0,100).toString()))return false;
+  const segment=lines.find(s=>!s.startsWith('#'));if(!segment||/#EXT-X-BYTERANGE:/.test(text))return null;
+  const r=await get(new URL(segment,url).href,{headers,maxBytes:PROBE_BYTES,prefixBytes:PROBE_BYTES,timeout:6500});
+  if(![200,206].includes(r.status)||r.body.length<564)return null;
+  if(/<\s*(?:!doctype|html)|^\s*\{/.test(r.body.subarray(0,100).toString()))return null;
+  let bytes=r.body;
   const key=/#EXT-X-KEY:[^\n]*METHOD=AES-128[^\n]*URI="([^"]+)"/.exec(text);
   if(key) {
     const k=await get(new URL(key[1],url).href,{headers,maxBytes:64,timeout:6500});
-    return k.status===200&&k.body.length===16;
+    if(k.status!==200||k.body.length!==16)return null;
+    const explicit=key[0].match(/\bIV=0x([a-f0-9]{1,32})/i)?.[1];
+    const iv=explicit?Buffer.from(explicit.padStart(32,'0'),'hex'):Buffer.alloc(16);
+    if(!explicit)iv.writeBigUInt64BE(BigInt(text.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/)?.[1]||0),8);
+    const decipher=createDecipheriv('aes-128-cbc',k.body,iv);decipher.setAutoPadding(false);
+    bytes=decipher.update(bytes.subarray(0,Math.floor(bytes.length/16)*16));
   }
-  return videoPrefix(r.body);
+  const map=/#EXT-X-MAP:[^\n]*URI="([^"]+)"/.exec(text);
+  if(map) {
+    if(/BYTERANGE=/.test(map[0]))return null;
+    const init=await get(new URL(map[1],url).href,{headers,maxBytes:256*1024,timeout:6500});
+    if(init.status!==200||!videoPrefix(init.body))return null;
+    bytes=Buffer.concat([init.body,bytes]);
+  }
+  return videoPrefix(bytes)?bytes:null;
 }
-export async function validateMedia(candidate, get=request) {
+export async function validateMedia(candidate, get=request, {inspect=inspectContent}={}) {
   if(!mediaUrl(candidate.url) && candidate.format!=='HLS') return null;
   try {
     const target=new URL(candidate.url);
     if(!['http:','https:'].includes(target.protocol)||target.username||target.password)return null;
     const hls=candidate.format==='HLS'||/\.m3u8(?:$|[?#])/i.test(candidate.url);
-    const r=await get(candidate.url,{headers:{...candidate.headers,...(!hls?{Range:'bytes=0-32767'}:{})},maxBytes:hls?1_000_000:65536,...(!hls?{prefixBytes:32768}:{}),timeout:6500});
+    const r=await get(candidate.url,{headers:candidate.headers||{},maxBytes:hls?1_000_000:PROBE_BYTES,...(!hls?{prefixBytes:PROBE_BYTES}:{}),timeout:6500});
     if(![200,206].includes(r.status)) return null;
     const contentType=String(r.headers['content-type']||'');
     const binaryVideo=(r.body.subarray(4,8).toString()==='ftyp'||r.body.subarray(0,4).toString('hex')==='1a45dfa3')&&/^video\//i.test(contentType);
-    if(hls?!await playableHls(r.body.toString(),r.url,candidate.headers||{},get):!binaryVideo) return null;
-    return {...candidate,url:r.url,format:hls?'HLS':'MP4',validatedAt:new Date().toISOString()};
+    const bytes=hls?await playableHls(r.body.toString(),r.url,candidate.headers||{},get):binaryVideo?r.body:null;
+    if(!bytes)return null;
+    const inspection=await inspect(bytes);
+    if(!inspection.ok){console.info(JSON.stringify({event:'media_rejected',reason:inspection.reason||'unverified-frame'}));return null;}
+    return {...candidate,url:r.url,format:hls?'HLS':'MP4',validatedAt:new Date().toISOString(),inspection:inspection.method||'frame-and-ocr'};
   } catch { return null; }
 }
 export function streamObject(candidate, provider) {
   const ext=candidate.format==='HLS'?'m3u8':'mp4';
   const headers=candidate.headers||{};
-  return {name:`BestStream • ${provider.name}`,title:`${candidate.format} • fonte verificada no servidor`,url:candidate.url,
+  return {name:`BestStream ${VERSION} • ${provider.name}`,title:`${candidate.format} • quadro inicial verificado`,url:candidate.url,
     behaviorHints:{notWebReady:true,bingeGroup:`beststream-${provider.id}`,filename:`beststream.${ext}`,...(Object.keys(headers).length?{proxyHeaders:{request:headers}}:{})}};
 }
 

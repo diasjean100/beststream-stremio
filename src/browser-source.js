@@ -50,6 +50,8 @@ export class BrowserSource {
     this.running=true;
     let context;
     const candidates=[];
+    let generation=0;
+    const requestGeneration=new WeakMap();
     let page;
     let timer;
     let stage='browser-start';
@@ -67,7 +69,8 @@ export class BrowserSource {
             await publicTarget(u);this.checked.set(u.hostname,Date.now()+60_000);
             if(this.checked.size>200)this.checked.delete(this.checked.keys().next().value);
           }
-          // Capture playlist requests, but do not download video segments on the server.
+          // Browser automation captures URLs only. A separate bounded probe
+          // decodes a frame before a candidate can become a Stremio source.
           if(/\.(ts|m4s|mp4|webm|aac|mp3|png|jpe?g|webp)(?:$|[?#])/i.test(u.href)) return route.abort();
           return route.continue();
         } catch {return route.abort();}
@@ -80,8 +83,9 @@ export class BrowserSource {
       const capture=(url,headers={},format)=>{
         if((mediaUrl(url)||format==='HLS')&&!/trailer|preview|youtube|introdb/i.test(url)&&!candidates.some(c=>c.url===url))candidates.push({url,...(format?{format}:{}),headers:{...(headers.referer?{Referer:headers.referer}:{}),...(headers.origin?{Origin:headers.origin}:{}),...(headers['user-agent']?{'User-Agent':headers['user-agent']}:{} )}});
       };
-      page.on('request',r=>{if(mediaUrl(r.url()))capture(r.url(),r.headers());});
+      page.on('request',r=>{requestGeneration.set(r,generation);if(mediaUrl(r.url()))capture(r.url(),r.headers());});
       page.on('response', response=> {
+        if(requestGeneration.get(response.request())!==generation)return;
         const url=response.url();
         if(response.status()>=400){const index=candidates.findIndex(c=>c.url===url);if(index>=0)candidates.splice(index,1);return;}
         const mime=String(response.headers()['content-type']||'');
@@ -121,14 +125,7 @@ export class BrowserSource {
         if(current.pathname!==expected.pathname||current.search!==expected.search)return{status:'not-found',streams:[]};
         if(video.type==='series'&&!nexaEpisodeConfirmed(await page.locator('body').innerText(),video))return{status:'not-found',streams:[]};
         stage='moviepal-play';
-        for(let pass=0;pass<3&&!candidates.length;pass++) {
-          for(const frame of page.frames()) {
-            const play=frame.getByRole('button',{name:/^(play|play video|watch now|resume)$/i}).first();
-            if(await play.isVisible().catch(()=>false))await play.click({timeout:1500,noWaitAfter:true}).catch(()=>{});
-          }
-          await page.waitForResponse(r=>mediaUrl(r.url()),{timeout:4500}).catch(()=>{});
-        }
-        const verified=await verifyCandidates(candidates,page);
+        const verified=await moviepalServers(page,candidates,()=>{generation++;candidates.length=0;});
         return{status:verified.length?'resolved':'unavailable',streams:verified,pageUrl:playerUrl};
       }
       if(provider.id==='nexa-mov') {
@@ -259,6 +256,30 @@ async function verifyCandidates(candidates,page) {
     if(candidates.some(c=>!checked.has(c.url)))continue;
     if(!page||pass>=4)break;
     await page.waitForResponse(r=>!checked.has(r.url())&&r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:1800}).catch(()=>{});
+  }
+  return [];
+}
+export async function moviepalServers(page,candidates,reset,{verify=verifyCandidates}={}) {
+  // These are the actual server controls in MoviePal's public player. Keep the
+  // already-confirmed title/season/episode page while changing only its source.
+  for(const server of ['Alpha','Beta','Charlie','Delta','Echo']) {
+    if(server!=='Alpha') {
+      const button=page.getByRole('button',{name:server,exact:true}).first();
+      if(!await button.isVisible().catch(()=>false))continue;
+      reset();
+      await button.click({timeout:1500,noWaitAfter:true}).catch(()=>{});
+    }
+    for(let pass=0;pass<2&&!candidates.length;pass++) {
+      for(const frame of page.frames()) {
+        const play=frame.getByRole('button',{name:/^(play|play video|watch now|resume)$/i}).first();
+        if(await play.isVisible().catch(()=>false))await play.click({timeout:1000,noWaitAfter:true}).catch(()=>{});
+      }
+      if(!candidates.length)await page.waitForResponse(r=>mediaUrl(r.url()),{timeout:3000}).catch(()=>{});
+    }
+    // Do not wait repeatedly for the same rejected slate before switching.
+    const verified=await verify(candidates);
+    console.info(JSON.stringify({event:'moviepal_server',server,candidates:candidates.length,verified:verified.length}));
+    if(verified.length)return verified;
   }
   return [];
 }

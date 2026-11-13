@@ -11,6 +11,7 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --omit=optional --ignore-scripts
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-eng
       - run: npm test
       - run: npm run check
   live-source:

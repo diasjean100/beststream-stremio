@@ -47,7 +47,7 @@ test('different browser queries are queued instead of cached as empty busy resul
 test('Fprime discovers its current public endpoint and validates the requested exact episode without executing scripts',async()=>{
   const key='11'.repeat(32),sourceCode=`const endpoint="https://source.test/astra",key="${key}",prefix="as_";/* AES-GCM */throw Error("remote code must never execute");`;
   const calls=[];
-  const source=new FprimeSource({get:async(url,options)=>{
+  const source=new FprimeSource({inspect:async()=>({ok:true,method:'unit-structural-fixture'}),get:async(url,options)=>{
     calls.push({url,options});
     const body=url==='https://fprime.at/'?'<script src="/assets/index-current.js"></script>':url.endsWith('index-current.js')?'import("./Watch-current.js")':url.endsWith('Watch-current.js')?sourceCode:url.includes('/astra?')?JSON.stringify({sources:{Astra:{url:'https://cdn.test/episode.m3u8'}}}):url.includes('episode.m3u8')?playlist:ts;
     return {url,status:200,headers:{},body:Buffer.isBuffer(body)?body:Buffer.from(body)};

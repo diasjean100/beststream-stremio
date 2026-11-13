@@ -4,7 +4,7 @@ import {Cache} from '../src/cache.js';
 import {publicAddress,publicTarget} from '../src/network.js';
 import {parseVideo,metadata} from '../src/metadata.js';
 import {BOOTSTRAP,parseDirectory} from '../src/directory.js';
-import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject,videoPrefix} from '../src/media.js';
+import {validHls,mediaUrl,validateMedia,playerIdentity,streamObject,videoPrefix,PROBE_BYTES} from '../src/media.js';
 import {sameIdentity,hasChallenge,nexaPlaybackUrl,nexaEpisodeConfirmed,normalize} from '../src/browser-source.js';
 import {createAddon,manifest} from '../src/addon.js';
 import {createServer} from '../src/server.js';
@@ -42,9 +42,10 @@ test('HTML, iframe pages, DRM and fake playlists are never direct streams',async
   assert.equal(await validateMedia({url:'https://example.com/a.mp4'},async()=>({status:403,body:Buffer.from('denied'),headers:{}})),null);
   const ts=Buffer.alloc(1024);ts[0]=ts[188]=ts[376]=0x47;
   const mediaFixture=async url=>({status:200,url,body:url.endsWith('a.ts')?ts:Buffer.from('#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\na.ts'),headers:{}});
-  const verified=await validateMedia({url:'https://example.com/a.m3u8'},mediaFixture);
+  const structuralOnly={inspect:async()=>({ok:true,method:'unit-structural-fixture'})};
+  const verified=await validateMedia({url:'https://example.com/a.m3u8'},mediaFixture,structuralOnly);
   assert.equal(verified.format,'HLS');
-  const noExtension=await validateMedia({url:'https://example.com/playlist?token=test',format:'HLS'},mediaFixture);
+  const noExtension=await validateMedia({url:'https://example.com/playlist?token=test',format:'HLS'},mediaFixture,structuralOnly);
   assert.equal(noExtension.format,'HLS');
   assert.equal(await validateMedia({url:'file:///etc/passwd',format:'HLS'},async()=>{throw Error('must not fetch')}),null);
   assert.equal(await validateMedia({url:'https://example.com/a.mp4'},async()=>({status:200,body:Buffer.from('<html>blocked</html>'),headers:{'content-type':'video/mp4'}})),null);
@@ -172,8 +173,8 @@ test('HLS requires a real video segment, including disguised image paths',async(
   const candidate={url:'https://media.test/title.m3u8',headers:{Origin:'https://source.test'}};
   for(const status of [403,404])assert.equal(await validateMedia(candidate,async url=>({status:url.endsWith('.png')?status:200,url,headers:{},body:playlist})),null);
   const calls=[];
-  const result=await validateMedia(candidate,async(url,options)=>{calls.push({url,options});return {status:200,url,headers:{},body:url.endsWith('.png')?ts:playlist};});
-  assert.ok(result);assert.equal(calls[1].options.prefixBytes,65536);assert.equal(calls[1].options.headers.Origin,'https://source.test');
+  const result=await validateMedia(candidate,async(url,options)=>{calls.push({url,options});return {status:200,url,headers:{},body:url.endsWith('.png')?ts:playlist};},{inspect:async()=>({ok:true,method:'unit-structural-fixture'})});
+  assert.ok(result);assert.equal(calls[1].options.prefixBytes,PROBE_BYTES);assert.equal(calls[1].options.headers.Origin,'https://source.test');
   assert.equal(calls[1].options.headers.Range,undefined);
 });
 
