@@ -1,3 +1,11 @@
+# Ajuste 0.5.4 — confirmar a seleção e isolar a inspeção
+
+O log da 0.5.3 registrou Charlie com um iframe Cinesrc ainda ativo, enquanto a interface pública define MoviesAPI para esse botão. O clique de 1,5 segundo era ignorado em caso de erro e o código marcava o servidor como selecionado sem confirmar seu estado. Agora o clique tem até cinco segundos, pode ser repetido e precisa deixar o botão no estado selecionado antes de prosseguir. O teste novo exige essa repetição quando o primeiro clique não registra a troca.
+
+Durante a inspeção HTTP/FFmpeg/OCR o navegador é temporariamente congelado pela API de ciclo de vida do Chromium e reativado em seguida. Isso reduz trabalho simultâneo dos players incorporados; não altera autenticação, CAPTCHA ou regras de acesso. A validação continua obrigatória caso a pausa não esteja disponível. Os limites de processo passam a dez segundos e o log distingue timeout de decodificação e de OCR.
+
+---
+
 A resposta de streams agora aguarda até 55 segundos pelo trabalho já em andamento. O corte anterior de 25 segundos fazia a API devolver vazio enquanto o navegador ainda procurava/validava a alternativa. Isso é uma mudança explícita do orçamento de espera, não uma prova de que toda consulta ficou rápida. A página informa que a primeira busca pode levar até um minuto no serviço gratuito. Os retornos continuam imediatos quando a resolução termina antes desse limite. Alpha fica logo após Charlie, para que a fonte que passou no runner continue alcançável dentro do limite de tempo do navegador.
 
 # Ajuste 0.5.3 — variante de inspeção e atribuição dos players

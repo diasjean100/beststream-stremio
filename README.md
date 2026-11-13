@@ -1,4 +1,4 @@
-# BestStream para Stremio — 0.5.3
+# BestStream para Stremio — 0.5.4
 
 Integração com fontes do [BestFreeStreaming](https://www.bestfreestreaming.org/), com conferência de título/episódio e reprodução de mídia dentro do Stremio. O diretório não hospeda os vídeos e cada site precisa de um adaptador próprio.
 
@@ -9,7 +9,7 @@ Abra https://beststream-stremio-jean.onrender.com/ e use **Adicionar ao Stremio*
 - `https://beststream-stremio-jean.onrender.com/native/manifest.json`
 - `https://beststream-stremio-jean.onrender.com/manifest.json`
 
-Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os quatro manifestos antigos recebem a mesma validação de vídeo. A fonte exibida no Stremio inclui a versão 0.5.3 para facilitar a conferência.
+Remova a instalação anterior no Stremio e reinstale pelo mesmo endereço caso o cliente ainda apresente a versão antiga. Os quatro manifestos antigos recebem a mesma validação de vídeo. A fonte exibida no Stremio inclui a versão 0.5.4 para facilitar a conferência.
 
 ## Fluxo de reprodução
 

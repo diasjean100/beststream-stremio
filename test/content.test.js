@@ -79,7 +79,7 @@ test('all installed add-on aliases suppress a decodable blocked video returned b
 
 test('MoviePal switches server after a rejected video without leaving the selected title page',async()=>{
   const candidates=[{url:'https://cdn.test/old.m3u8'}],clicked=[],verified=[];
-  const page={frames:()=>[],getByRole:(_role,{name})=>({first:()=>({isVisible:async()=>true,click:async()=>{clicked.push(name);candidates.push({url:`https://cdn.test/${name==='Charlie'?'warning':'control'}.m3u8`});}})})};
+  const page={frames:()=>[],waitForFunction:async()=>{},getByRole:(_role,{name})=>({first:()=>({isVisible:async()=>true,getAttribute:async()=> 'accent-bg',click:async()=>{clicked.push(name);candidates.push({url:`https://cdn.test/${name==='Charlie'?'warning':'control'}.m3u8`});}})})};
   const result=await moviepalServers(page,candidates,()=>{candidates.length=0;},{verify:async(list,_page,{onBlocked})=>{verified.push(list.map(c=>c.url));if(list.some(c=>c.url.includes('/warning.')))onBlocked();return list.filter(c=>c.url.includes('/control.'));}});
   assert.deepEqual(clicked,['Charlie','Alpha']);assert.equal(result[0].url,'https://cdn.test/control.m3u8');
   assert.deepEqual(verified,[['https://cdn.test/warning.m3u8'],['https://cdn.test/control.m3u8']]);
@@ -88,7 +88,17 @@ test('MoviePal switches server after a rejected video without leaving the select
 test('a delayed Play control and an early audio probe do not make MoviePal abandon the video',async()=>{
   const candidates=[{url:'https://cdn.test/audio-probe.mp4'}];let polls=0;
   const frame={url:()=> 'https://player.test/',parentFrame:()=>null,getByRole:()=>({first:()=>({isVisible:async()=>polls>=3,click:async()=>candidates.push({url:'https://cdn.test/video.m3u8'})})})};
-  const page={frames:()=>[frame],waitForResponse:async()=>{polls++;await new Promise(r=>setTimeout(r,5));},getByRole:(_role,{name})=>{assert.equal(name,'Charlie');return{first:()=>({isVisible:async()=>true,click:async()=>{}})};}};
+  const page={frames:()=>[frame],waitForFunction:async()=>{},waitForResponse:async()=>{polls++;await new Promise(r=>setTimeout(r,5));},getByRole:(_role,{name})=>{assert.equal(name,'Charlie');return{first:()=>({isVisible:async()=>true,getAttribute:async()=> 'accent-bg',click:async()=>{}})};}};
   const result=await moviepalServers(page,candidates,()=>{candidates.length=0;candidates.push({url:'https://cdn.test/audio-probe.mp4'});},{serverBudgetMs:1000,verify:async list=>list.filter(c=>c.url.endsWith('/video.m3u8'))});
   assert.equal(result[0].url,'https://cdn.test/video.m3u8');assert.ok(polls>=3);
+});
+
+test('MoviePal retries an unconfirmed click before attributing video to a different server',async()=>{
+  const candidates=[];let clicks=0;
+  const page={frames:()=>[],waitForFunction:async()=>{if(clicks<2)throw Error('not selected');},getByRole:(_role,{name})=>{assert.equal(name,'Charlie');return{first:()=>({
+    isVisible:async()=>true,getAttribute:async()=>clicks>=2?'accent-bg':'glass',
+    click:async()=>{clicks++;if(clicks>=2)candidates.push({url:'https://cdn.test/video.m3u8'});}
+  })};}};
+  const result=await moviepalServers(page,candidates,()=>{candidates.length=0;},{verify:async list=>list});
+  assert.equal(clicks,2);assert.equal(result[0].url,'https://cdn.test/video.m3u8');
 });

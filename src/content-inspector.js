@@ -7,12 +7,12 @@ export function blockedSlate(text) {
   return /\batlantic st\b|\bclassroom best\b|\bcloudflare warp\b|\bunblocked school proxy\b|\b(?:disable|turn off) (?:your )?vpn\b/.test(words);
 }
 
-function processBytes(binary,args,input,maxBytes,timeout=6000) {
+function processBytes(binary,args,input,maxBytes,timeout=10000) {
   return new Promise((resolve,reject)=>{
     const child=spawn(binary,args,{stdio:['pipe','pipe','ignore'],env:{...process.env,OMP_THREAD_LIMIT:'1'}});
     const chunks=[];let bytes=0,settled=false;
     const finish=(error,value)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve(value);};
-    const timer=setTimeout(()=>{child.kill('SIGKILL');finish(Error('inspection-timeout'));},timeout);
+    const timer=setTimeout(()=>{child.kill('SIGKILL');finish(Error(binary==='ffmpeg'?'frame-decode-timeout':'frame-ocr-timeout'));},timeout);
     child.on('error',()=>finish(Error('inspector-unavailable')));
     child.stdout.on('data',chunk=>{
       bytes+=chunk.length;

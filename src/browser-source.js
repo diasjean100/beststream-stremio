@@ -245,7 +245,16 @@ export class BrowserSource {
     }
   }
 }
-async function verifyCandidates(candidates,page,{onBlocked}={}) {
+async function pausedInspection(page,inspect) {
+  let session;
+  if(page&&!page.isClosed())try {
+    session=await page.context().newCDPSession(page);
+    await session.send('Page.setWebLifecycleState',{state:'frozen'});
+  }catch{/* Content validation remains mandatory if this browser cannot pause. */}
+  try{return await inspect();}
+  finally{if(session){await session.send('Page.setWebLifecycleState',{state:'active'}).catch(()=>{});await session.detach().catch(()=>{});}}
+}
+async function verifyCandidates(candidates,page,{onBlocked,validationPage=page}={}) {
   const checked=new Set();
   for(let pass=0;pass<5&&checked.size<6;pass++) {
     // Audio-only playlists and capability probes can arrive before the video.
@@ -256,7 +265,7 @@ async function verifyCandidates(candidates,page,{onBlocked}={}) {
     // a good stream behind a duplicate decode and could miss Stremio's deadline.
     for(const candidate of batch) {
       let blocked=false;
-      const verified=await validateMedia(candidate,undefined,{onReject:reason=>{if(reason==='blocked-slate')blocked=true;}});
+      const verified=await pausedInspection(validationPage,()=>validateMedia(candidate,undefined,{onReject:reason=>{if(reason==='blocked-slate')blocked=true;}}));
       if(verified)return [verified];
       if(blocked){onBlocked?.();return [];}
     }
@@ -275,7 +284,15 @@ export async function moviepalServers(page,candidates,reset,{verify=verifyCandid
       const button=page.getByRole('button',{name:server,exact:true}).first();
       if(!await button.isVisible().catch(()=>false))continue;
       reset();
-      await button.click({timeout:1500,noWaitAfter:true}).catch(()=>{});
+      let active=false;
+      for(let attempt=0;attempt<2&&!active;attempt++) {
+        await button.click({timeout:5000,noWaitAfter:true}).catch(()=>{});
+        await page.waitForFunction(name=>Array.from(document.querySelectorAll('button')).some(el=>el.textContent.trim()===name&&el.classList.contains('accent-bg')),server,{timeout:2500}).catch(()=>{});
+        // A visible button or a timed-out click is not a server selection.
+        // This is the selected-state class in the site's public Watch UI.
+        active=await button.getAttribute('class').then(value=>/(?:^|\s)accent-bg(?:\s|$)/.test(value||'')).catch(()=>false);
+      }
+      if(!active){console.info(JSON.stringify({event:'moviepal_selection_failed',server}));continue;}
       selected=server;
     }
     const until=Date.now()+serverBudgetMs,checked=new Set();
@@ -290,7 +307,7 @@ export async function moviepalServers(page,candidates,reset,{verify=verifyCandid
       }
       const fresh=candidates.filter(c=>!checked.has(c.url)).slice(0,6-checked.size);
       for(const candidate of fresh)checked.add(candidate.url);
-      if(fresh.length)verified=await verify(fresh,undefined,{onBlocked:()=>{blocked=true;}});
+      if(fresh.length)verified=await verify(fresh,undefined,{onBlocked:()=>{blocked=true;},validationPage:page});
       if(verified.length||blocked||checked.size>=6)break;
       await page.waitForResponse(r=>r.status()<400&&(mediaUrl(r.url())||/application\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(String(r.headers()['content-type']||''))),{timeout:500}).catch(()=>{});
     }while(Date.now()<until);
