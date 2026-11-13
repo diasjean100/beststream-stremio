@@ -6,6 +6,12 @@ O código de retransmissão de vídeo e seu transporte de streaming foram exclu�
 
 27 testes locais passaram, incluindo um teste FFmpeg que recebeu áudio/vídeo do servidor de origem e verificou que o servidor do add-on recebeu somente a consulta de streams. Sintaxe e diff foram verificados. Os adaptadores continuam sujeitos aos bloqueios e mudanças das fontes. Reelix foi acrescentado como integração experimental com confirmação de TMDB, tipo, título e episódio.
 
+Teste externo aprovado da ponte de links: https://github.com/diasjean100/beststream-stremio/actions/runs/43357458452 . Código funcional testado: `a4c61bd2fe8da4989d21d41b95bf3f19d3c4668b`.
+
+O runner decodificou seis segundos de vídeo e áudio obrigatórios de Matrix, Inception e Teen Wolf S1E1, recebidos diretamente do CDN da fonte MoviePal. Todas as variantes antigas de instalação devolveram URLs da origem, sem `externalUrl` nem endereço de retransmissão. A busca inicial levou aproximadamente 4 a 5 segundos nessas amostras.
+
+Reelix foi consultado separadamente para Matrix e Teen Wolf S1E1: retornou zero streams nas duas consultas. Sua reprodução permanece sem confirmação; não é cobertura adicional validada. O workflow de protocolo também passou: https://github.com/diasjean100/beststream-stremio/actions/runs/43357458526 .
+
 Os resultados das versões anteriores abaixo são históricos; testes locais não substituem a verificação externa da versão publicada.
 
 ---

@@ -5,7 +5,7 @@ import { BrowserSource } from './browser-source.js';
 import { streamObject } from './media.js';
 import {VERSION} from './version.js';
 export function manifest(nativeOnly=false,bridgeMode=false) {
-  return {id:`br.jean.beststream${nativeOnly?'.native':''}${bridgeMode?'.bridge':''}`,version:VERSION,name:bridgeMode?'BestStream • Ponte':nativeOnly?'BestStream • Direto':'BestStream',
+  return {id:`br.jean.beststream${nativeOnly?'.native':''}${bridgeMode?'.bridge':''}`,version:VERSION,name:bridgeMode||nativeOnly?'BestStream • Ponte':'BestStream',
     description:'Ponte de links: encontra mídia compatível e entrega a URL ao Stremio. O vídeo é recebido diretamente da fonte, sem retransmissão pela hospedagem.',
     resources:[{name:'stream',types:['movie','series'],idPrefixes:['tt']},'catalog'],types:['movie','series'],
     catalogs:[{type:'movie',id:'beststream-movies',name:'BestStream • Buscar filmes',extra:[{name:'search',isRequired:true},{name:'skip'}]},

@@ -16,12 +16,19 @@ while(Date.now()<until){
   await new Promise(resolve=>setTimeout(resolve,3000));
 }
 if(!ready)throw Error('The intended release did not become ready within four minutes');
+for(const prefix of ['','/native','/bridge','/bridge/native']){
+  const manifest=await json(`${base}${prefix}/manifest.json`);
+  if(manifest.version!==VERSION)throw Error('An older installation path did not receive this release');
+}
+const retired=await fetch(`${base}/relay/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/0.ts`);
+if(retired.status!==410)throw Error('The obsolete video relay is still exposed');
 let failures=0;
 for(const [type,id] of [['movie','tt0133093'],['movie','tt1375666'],['series','tt1567432:1:1']]) {
   const started=Date.now();
   try{
     const data=await json(`${base}/native/stream/${type}/${id}.json`,{timeout:80_000});
     const streams=(data.streams||[]).filter(s=>s.url);
+    if(streams.some(s=>s.url.startsWith(base)||s.externalUrl))throw Error('Expected direct source URLs only');
     let verified=0;
     for(const s of streams.slice(0,2)){
       const candidate={url:s.url,format:'HLS',headers:s.behaviorHints?.proxyHeaders?.request||{}};

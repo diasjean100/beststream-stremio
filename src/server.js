@@ -29,7 +29,7 @@ export function createServer(addon=createAddon(),getDirectory=directory,{playTim
     const bridgeMode=path.startsWith('/bridge/');if(bridgeMode)path=path.slice(7);
     const nativeOnly=path.startsWith('/native/');if(nativeOnly)path=path.slice(7);
     try {
-      if(path==='/healthz')return send(200,{ok:true,name:'BestStream',version:VERSION,commit:process.env.RENDER_GIT_COMMIT||null});
+      if(path==='/healthz')return send(200,{ok:true,name:'BestStream',version:VERSION,delivery:'direct-links',commit:process.env.RENDER_GIT_COMMIT||null});
       if(path==='/manifest.json')return send(200,addon.manifest(nativeOnly,bridgeMode));
       if(path==='/api/sources')return send(200,await getDirectory());
       // PUBLIC_BASE_URL or Render's trusted canonical URL prevents forwarded-host poisoning.
